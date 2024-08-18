@@ -1,6 +1,6 @@
-# sink
+# sensor
 
-## rpi sink node
+## esp32 sensor node
 - **sink_main.py** -> main script, should handle all the other modules within the applications
 - /common contains helper, provider modules (utils, constants, etc.)
 - /src contains application modules (api, mqtt, tests)
