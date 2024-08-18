@@ -1,4 +1,4 @@
 # ignore every environment / config files
 
-sink/configs.yaml
+sink/settings.yaml
 .vscode

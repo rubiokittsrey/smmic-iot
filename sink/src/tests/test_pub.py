@@ -22,14 +22,17 @@ def mqtt_loop_test(topic):
 
     while True:
         global msg
-        msg = secrets.token_urlsafe(16) # random hash for the memes
+        msg = [] # random hash for the memes
+
+        for i in range(3):
+            msg.append(secrets.token_urlsafe(16))
 
         try:
             payload=str(msg)
             pub=client.publish(
                 topic=topic,
                 payload=payload.encode('utf-8'),
-                qos=0,
+                qos=1,
             )
             pub.wait_for_publish()
 
