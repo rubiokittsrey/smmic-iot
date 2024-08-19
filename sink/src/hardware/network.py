@@ -3,6 +3,7 @@ import psutil
 import socket
 import time
 import settings
+import argparse
 
 from utils import logs
 
@@ -10,12 +11,23 @@ from utils import logs
 # this is only for development purposes
 # the value for this should come fro mthe settings.yaml
 
-def __ping__(host):
-    try:
-        output = subprocess.check_output(["ping", "-c", "1", host])
-        return True
-    except subprocess.CalledProcessError:
-        return False
+# ping the specified host for n amount of times
+def __ping__(host, repeat=1):
+    if(not repeat):
+        repeat = 1
+    results = []
+    for i in range(repeat):
+        try:
+            output = subprocess.check_output(["ping", "-c", "1", host])
+            logs.info(output.decode('utf-8'))
+            results.append(True)
+        except subprocess.CalledProcessError:
+            results.append(False)
+            output = subprocess.CalledProcessError
+            logs.error(f"Host {host} is unreachable")
+        time.sleep(1.5)
+    print(results)
+    return results
 
 # check network connectivity by checking if any interface is UP and has an ip address, returns None if not connected
 # returns a list of the interfaces with ip addresses if connected
@@ -44,7 +56,7 @@ def monitor_network():
         if maxTimeouts == 0:
             logs.error(f'Max timeouts reached, terminating now')
             return False
-
+        
     # host = "8.8.8.8" # Google DNS
     # if __ping__(host):
     #     print(f"Network is UP - {host} is reachable.")

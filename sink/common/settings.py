@@ -16,9 +16,15 @@ __api_endpoints__ = settings["api_routes"]["endpoints"]
 __api_configs__ = settings["api_configurations"]
 __broker_configs__ = settings["mqtt_broker"]
 __topics__ = settings["mqtt_topics_smmic"]
+__dev_configs__ = settings["dev_configurations"]
+
+# development configurations
+class DevConfigs:
+    ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
 
 # application configurations
 class APPConfigurations:
+    GATEWAY = __app_net_configs__["gateway"]
     NETWORK_TIMEOUT = __app_net_configs__["timeout"]
     NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
 

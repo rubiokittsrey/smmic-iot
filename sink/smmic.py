@@ -3,10 +3,7 @@
 import os
 
 # TESTING IMPORTS BELOW
-import smmic.api as api
-import smmic.data as data
-import smmic.hardware as hardware
-import smmic.mqtt as mqtt
+import src.hardware as hardware
 
 if __name__ == "__main__":
     os.system('clear')
