@@ -1,6 +1,5 @@
 # this module contains the project settings, configurations, constants, all loaded from configs.yaml
 # configs.yaml is gitignored by default
-
 import os
 import yaml
 
@@ -10,6 +9,7 @@ with open(spath, 'r') as sfile:
     settings = yaml.safe_load(sfile)
 
 __app_net_configs__ = settings["app_configurations"]["network"]
+__test_configs__ = settings["app_configurations"]["tests"]
 __dev_topics__ = settings["mqtt_topics_dev"]
 __base_url__ = settings["api_routes"]["base_url"]
 __api_endpoints__ = settings["api_routes"]["endpoints"]
@@ -24,6 +24,7 @@ class DevConfigs:
 
 # application configurations
 class APPConfigurations:
+    SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
     NETWORK_TIMEOUT = __app_net_configs__["timeout"]
     NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
