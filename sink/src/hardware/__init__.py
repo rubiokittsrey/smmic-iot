@@ -1,1 +1,1 @@
-from irrigation import *
+import network

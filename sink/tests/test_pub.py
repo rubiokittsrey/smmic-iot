@@ -9,7 +9,6 @@ import argparse
 
 from settings import MQTTBroker, MQTTDevTopics
 import utils
-import broadcast
 
 def on_pub(client, userdata, mid):
     print(f"data published: {msg}")

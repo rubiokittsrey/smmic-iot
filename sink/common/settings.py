@@ -1,33 +1,53 @@
 # this module contains the project settings, configurations, constants, all loaded from configs.yaml
 # configs.yaml is gitignored by default
-
 import os
 import yaml
 
-config_path = os.path.join(os.path.dirname(__file__), '../settings.yaml')
+spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 
-with open(config_path, 'r') as config_file:
-    config = yaml.safe_load(config_file)
+with open(spath, 'r') as sfile:
+    settings = yaml.safe_load(sfile)
 
-# api base url, endpoints
+__app_net_configs__ = settings["app_configurations"]["network"]
+__test_configs__ = settings["app_configurations"]["tests"]
+__dev_topics__ = settings["mqtt_topics_dev"]
+__base_url__ = settings["api_routes"]["base_url"]
+__api_endpoints__ = settings["api_routes"]["endpoints"]
+__api_configs__ = settings["api_configurations"]
+__broker_configs__ = settings["mqtt_broker"]
+__topics__ = settings["mqtt_topics_smmic"]
+__dev_configs__ = settings["dev_configurations"]
+
+# development configurations
+class DevConfigs:
+    ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
+
+# application configurations
+class APPConfigurations:
+    SRC_PATH = __test_configs__["src_path"]
+    GATEWAY = __app_net_configs__["gateway"]
+    NETWORK_TIMEOUT = __app_net_configs__["timeout"]
+    NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
+
+# api base url, enpoints
 class APIRoutes:
-    BASE_URL = config["base_url"]
-    TEST_URL = config['base_url'] + config['endpoints']['rpi_test']
-    HEADERS = config["headers"]
+    BASE_URL = __base_url__
+    TEST_URL = __api_endpoints__["rpi_test"]
+    HEADERS = settings["headers"]
 
 # api configurations
 class APIConfigs:
-    SECRET_KEY = config['api_configurations']['secret_key']
+    SECRET_KEY = __api_configs__["secret_key"]
 
-# mqtt broker configurations
-class MQTTBroker:
-    HOST = config["mqtt_broker"]["host"]
-    PORT = config["mqtt_broker"]["port"]
+# mqtt broker configuration
+class Broker:
+    HOST = __broker_configs__["host"]
+    PORT = __broker_configs__["port"]
 
 # mqtt dev topics
-class MQTTDevTopics:
-    TEST = config["mqtt_topics_dev"]["test"]
+class DevTopics:
+    TEST = __dev_topics__["test"]
 
 # mqtt functional topics
-class SMMICTopics:
-    BROADCAST = config["mqtt_topics_smmic"]["broadcast"]
+class Topics:
+    BROADCAST = __topics__["broadcast"]
