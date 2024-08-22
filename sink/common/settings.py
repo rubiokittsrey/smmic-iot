@@ -26,6 +26,7 @@ class DevConfigs:
 class APPConfigurations:
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
+    NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
     NETWORK_TIMEOUT = __app_net_configs__["timeout"]
     NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
 
@@ -47,6 +48,8 @@ class Broker:
 # mqtt dev topics
 class DevTopics:
     TEST = __dev_topics__["test"]
+    SENSOR_ONE = __dev_topics__["sensor1"]
+    SENSOR_TWO = __dev_topics__["sensor2"]
 
 # mqtt functional topics
 class Topics:

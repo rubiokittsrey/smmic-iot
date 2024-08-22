@@ -7,7 +7,7 @@ import paho.mqtt.client as mqtt
 import secrets
 import argparse
 
-from settings import MQTTBroker, MQTTDevTopics
+from settings import Broker, DevTopics
 import utils
 
 def on_pub(client, userdata, mid):
@@ -16,16 +16,12 @@ def on_pub(client, userdata, mid):
 def mqtt_loop_test(topic):
     client = mqtt.Client("test-pub")
     client.on_publish = on_pub
-    client.connect(MQTTBroker.HOST, MQTTBroker.PORT)
+    client.connect(Broker.HOST, Broker.PORT)
     client.loop_start()
 
     while True:
         global msg
-        msg = [] # random hash for the memes
-
-        for i in range(3):
-            msg.append(secrets.token_urlsafe(16))
-
+        msg  = str(secrets.token_urlsafe(16))
         try:
             payload=str(msg)
             pub=client.publish(
@@ -42,7 +38,7 @@ def mqtt_loop_test(topic):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a publish test on the MQTT network")
-    parser.add_argument("--topic", type=str, help="Specify a different topic to test publish (other than the default test topic)", default=MQTTDevTopics.TEST)
+    parser.add_argument("--topic", type=str, help="Specify a different topic to test publish (other than the default test topic)", default=DevTopics.TEST)
 
     args = parser.parse_args()
     mqtt_loop_test(args.topic)

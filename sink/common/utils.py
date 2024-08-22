@@ -7,22 +7,6 @@ import re
 def pretty_print(message, ):
     print(f'')
 
-#TODO: ENABLE WRITING TO LOG FILE!!
-def logger():
-    logger = __logging__.getLogger(__name__)
-    logger.setLevel(__logging__.INFO)
-    
-    log_directory = '/home/rubiokittsrey/Projects/smmic-iot/sink/common/logs/'
-    log_file = 'smmic.log'
-    os.makedirs(log_directory, exist_ok=True)
-    log_path = os.path.join(log_directory, log_file)
-
-    logs_handler, console_handler = __init_logs_handlers__(log_path)
-    logger.addHandler(logs_handler) if settings.DevConfigs.ENABLE_LOG_TO_FILE else None
-    logger.addHandler(console_handler)
-
-    return logger
-
 def __init_logs_handlers__(log_path, log_to_file = True): 
     logs_handler = __logging__.FileHandler(log_path)
     console_handler = __logging__.StreamHandler()
@@ -36,6 +20,20 @@ def __init_logs_handlers__(log_path, log_to_file = True):
     console_handler.setFormatter(formatter)
 
     return logs_handler, console_handler
+
+# returns the logger object from caller with fromatter, console handler and file handler
+def log_config(logger):
+    logger.setLevel(__logging__.INFO)
+    log_directory = '/home/rubiokittsrey/Projects/smmic-iot/sink/common/logs/'
+    log_file = 'smmic.log'
+    os.makedirs(log_directory, exist_ok=True)
+    log_path = os.path.join(log_directory, log_file)
+
+    logs_handler, console_handler = __init_logs_handlers__(log_path)
+    logger.addHandler(logs_handler) if settings.DevConfigs.ENABLE_LOG_TO_FILE else None
+    logger.addHandler(console_handler)
+
+    return logger
 
 # parses and returns the ip address, packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really

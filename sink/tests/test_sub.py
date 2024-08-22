@@ -1,18 +1,19 @@
 # run this script to test out topics within the MQTT network
 # example: python test_sub.py --topic "/topic/to/test"
-# default topic (without --topic argument) will use MQTTDevTopics.TEST from configs.yaml
+# default topic (without --topic argument) will use DevTopics.TEST from configs.yaml
 
 import paho.mqtt.client as mqtt
 import time
 import argparse
+import settings
 
-from settings import MQTTBroker, MQTTDevTopics
+from settings import Broker, DevTopics
 
 topic = None
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a subscribe test on the MQTT network")
-    parser.add_argument("--topic", type=str, help="Specify a different topic to test subscribe (other than the default test topic)", default=MQTTDevTopics.TEST)
+    parser.add_argument("--topic", type=str, help="Specify a different topic to test subscribe (other than the default test topic)", default=DevTopics.TEST)
 
     args = parser.parse_args()
     topic = args.topic
@@ -36,9 +37,10 @@ connected = 0
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 client.message_callback_add(topic, callback_mqtt_test)
-client.connect(MQTTBroker.HOST, MQTTBroker.PORT)
+client.connect(Broker.HOST, Broker.PORT)
 client.loop_start()
 client.subscribe(topic)
+client.subscribe(settings.DevTopics.SENSOR_ONE)
 
 while True:
     time.sleep(5)
