@@ -12,9 +12,22 @@ from utils import log_config
 
 log = log_config(logging.getLogger(__name__))
 
-if __name__ == "__main__":
-    if(not settings.DevConfigs.ENABLE_LOG_TO_FILE):
-        print('Logging to file disabled\n')
-    os.system('clear')
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        network_task = executor.submit(hardware.network.network_monitor)
+# def main():
+#     if 
+
+# def main():
+#     if(not settings.DevConfigs.ENABLE_LOG_TO_FILE):
+#         print('Logging to file disabled\n')
+#     os.system('clear')
+
+#     hardware.network.network_check()
+
+#     with concurrent.futures.ThreadPoolExecutor() as executor:
+#         try:
+#             None
+#             # network_task = executor.submit(hardware.network.network_monitor)
+#         except KeyboardInterrupt:
+#             log.info('Process terminated with \'KeyboardInterrupt\'')
+
+# if __name__ == "__main__":
+#     main()

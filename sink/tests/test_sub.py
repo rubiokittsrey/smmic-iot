@@ -29,7 +29,7 @@ def on_disconnect(client, userdata, rc):
     print("disconnected from mqtt server")
 
 def callback_mqtt_test(client, userdata, msg):
-    print(f"payload: {str(msg.payload.decode('utf-8'))}")
+    print(f"payload: {str(msg.payload.decode('utf-8'))} ({msg.topic})")
 
 client = mqtt.Client("test-sub")
 connected = 0
@@ -40,7 +40,7 @@ client.message_callback_add(topic, callback_mqtt_test)
 client.connect(Broker.HOST, Broker.PORT)
 client.loop_start()
 client.subscribe(topic)
-client.subscribe(settings.DevTopics.SENSOR_ONE)
+client.subscribe(settings.DevTopics.TEST)
 
 while True:
     time.sleep(5)

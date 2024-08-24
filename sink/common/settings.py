@@ -10,13 +10,21 @@ with open(spath, 'r') as sfile:
 
 __app_net_configs__ = settings["app_configurations"]["network"]
 __test_configs__ = settings["app_configurations"]["tests"]
-__dev_topics__ = settings["mqtt_topics_dev"]
 __base_url__ = settings["api_routes"]["base_url"]
 __api_endpoints__ = settings["api_routes"]["endpoints"]
 __api_configs__ = settings["api_configurations"]
-__broker_configs__ = settings["mqtt_broker"]
-__topics__ = settings["mqtt_topics_smmic"]
-__dev_configs__ = settings["dev_configurations"]
+__broker_configs__ = settings["broker"]
+__dev_configs__ = settings["dev_configs"]
+
+class status:
+    INFO = 100
+    SUCCESS = 200
+    ERROR = 400
+    WARNING = 300
+    CRITICAL = 500
+    ACTIVE = SUCCESS
+    INACTIVE = WARNING
+    FAILED = ERROR
 
 # development configurations
 class DevConfigs:
@@ -24,6 +32,7 @@ class DevConfigs:
 
 # application configurations
 class APPConfigurations:
+    NETWORK_INTERFACE = __app_net_configs__["primary_interface"]
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
     NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
@@ -44,13 +53,21 @@ class APIConfigs:
 class Broker:
     HOST = __broker_configs__["host"]
     PORT = __broker_configs__["port"]
+    ROOT_TOPIC = __broker_configs__["root_topic"]
 
 # mqtt dev topics
 class DevTopics:
-    TEST = __dev_topics__["test"]
-    SENSOR_ONE = __dev_topics__["sensor1"]
-    SENSOR_TWO = __dev_topics__["sensor2"]
+    TEST = "/dev/test"
 
 # mqtt functional topics
-class Topics:
-    BROADCAST = __topics__["broadcast"]
+class SensorTopics:
+    #BROADCAST = "/broadcast"
+    DATA = f"{__broker_configs__["root_topic"]}/sensor/+/data"
+    ALERT = f"{__broker_configs__["root_topic"]}/sensor/+/alert"
+
+class SinkTopics:
+    ALERT = f"{__broker_configs__["root_topic"]}/sink/alert"
+
+class AdminTopics:
+    SETTINGS = f"{__broker_configs__["root_topic"]}/admin/settings/#" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
+    COMMANDS = f"{__broker_configs__["root_topic"]}/admin/commands"

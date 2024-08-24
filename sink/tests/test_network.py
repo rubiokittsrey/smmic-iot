@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     subparser = parser.add_subparsers(dest='function')
 
-    parser_monitor_network = subparser.add_parser("network_monitor", help="Monitor network connectivity")
+    parser_network_check = subparser.add_parser("network_check", help="Monitor network connectivity")
 
     parser_ping = subparser.add_parser("ping", help="Ping an host")
     parser_ping.add_argument("--host", help="The host to ping")
@@ -28,8 +28,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if(not args.function or args.function == 'network_monitor'):
-        network.network_monitor()
+    if(not args.function or args.function == 'network_check'):
+        network.network_check()
     elif(args.function == 'ping'):
         network.__ping__(host=args.host, repeat=args.repeat if args.repeat else 1)
     elif(args.function == 'check_interface'):
