@@ -2,6 +2,7 @@
 # configs.yaml is gitignored by default
 import os
 import yaml
+import logging
 
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 
@@ -16,6 +17,17 @@ __api_configs__ = settings["api_configurations"]
 __broker_configs__ = settings["broker"]
 __dev_configs__ = settings["dev_configs"]
 
+LOGGING_LEVEL = logging.DEBUG
+ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
+
+def set_logging_level(level):
+    global LOGGING_LEVEL
+    LOGGING_LEVEL = level
+
+def enable_log_to_file(value):
+    global ENABLE_LOG_TO_FILE
+    ENABLE_LOG_TO_FILE = value
+
 class status:
     INFO = 100
     SUCCESS = 200
@@ -27,8 +39,7 @@ class status:
     FAILED = ERROR
 
 # development configurations
-class DevConfigs:
-    ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
+# class DevConfigs:
 
 # application configurations
 class APPConfigurations:
@@ -38,6 +49,10 @@ class APPConfigurations:
     NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
     NETWORK_TIMEOUT = __app_net_configs__["timeout"]
     NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
+
+    #logging
+    LOG_FILE_DIRECTORY = __dev_configs__["log_file_directory"]
+    LOG_FILE_NAME = __dev_configs__["log_file_name"]
 
 # api base url, enpoints
 class APIRoutes:

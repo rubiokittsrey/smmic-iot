@@ -26,7 +26,7 @@ def __check_interface__() -> Tuple[str, Optional[str]]:
         # check if the interface has an active ipv4 address
         # assing address to ip variable
         if not addresses:
-            log.error(f'No active addresses found for interface \'{interface}\'')
+            log.error(f'No active ip addresses found for interface \'{interface}\'')
         else:
             for address in addresses:
                 if address.family == socket.AF_INET:
@@ -38,7 +38,7 @@ def __check_interface__() -> Tuple[str, Optional[str]]:
 # ping the specified host for n amount of times
 # returns the ip, packets sent, packets received and the packet loss as well as rtt statistics
 def __ping__(host, repeat=1) -> Tuple[str, ...]:
-    sent = received = loss = rtt_min = rtt_avg = rtt_max = rtt_mdev = error = time = None
+    sent = received = loss = rtt_min = rtt_avg = rtt_max = rtt_mdev = errors = time = None
 
     # repeat the PING command based on repeat parameter
     for i in range(repeat):
@@ -78,15 +78,22 @@ def __time_out_handler__(function):
 
     return result
 
-def network_check():
+# checks the primary network interface for active ip addresses
+# and then pings the gateway to confirm network connectivity
+# priamry network interface and gateway are configured in settings.yaml
+def network_check() -> bool:
     interface, ip = __check_interface__()
     if not ip:
         return False
     
-    sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = __ping__('192.168.1.100')
+    log.debug(f'Trying PING with gateway address: {settings.APPConfigurations.GATEWAY}')
+    sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = __ping__(settings.APPConfigurations.GATEWAY)
 
     if errors:
-        print('yurt')
+        log.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}!')
+        return False
+
+    return True
 
         
 # returns the ip and in the interface of the device

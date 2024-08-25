@@ -3,37 +3,43 @@ import settings
 import os
 import re
 from typing import Tuple, Optional
+
 # do not use
 def pretty_print(message, ):
     print(f'')
 
-def __init_logs_handlers__(log_path: str) -> Tuple[__logging__.StreamHandler, Optional[__logging__.FileHandler]]: 
-    logs_handler = __logging__.FileHandler(log_path)
-    console_handler = __logging__.StreamHandler()
+log_directory = settings.APPConfigurations.LOG_FILE_DIRECTORY
+log_file = settings.APPConfigurations.LOG_FILE_NAME
+os.makedirs(log_directory, exist_ok=True)
+log_path = os.path.join(log_directory, log_file)
 
-    # console_handler.setLevel(__logging__.DEBUG)
-    # logs_handler.setLevel(__logging__.DEBUG)
-
-    formatter = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-    logs_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-
-    return console_handler, logs_handler
+# LOG VARIABLES (HANDLERS, FORMATTER)
+__LOGGER_LIST__ = []
+__LOG_FILE_HANDLER__ = __logging__.FileHandler(log_path)
+__CONSOLE_HANDLER__ = __logging__.StreamHandler()
+__LOG_FORMATTER__ = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 # returns the logger object from caller with fromatter, console handler and file handler
 def log_config(logger) -> __logging__.Logger:
+    global __LOGGER_LIST__
+    __LOGGER_LIST__.append(logger)
     logger.setLevel(__logging__.DEBUG)
-    log_directory = '/home/rubiokittsrey/Projects/smmic-iot/sink/common/logs/'
-    log_file = 'smmic.log'
-    os.makedirs(log_directory, exist_ok=True)
-    log_path = os.path.join(log_directory, log_file)
 
-    console_handler, logs_handler = __init_logs_handlers__(log_path)
+    console_handler = __CONSOLE_HANDLER__
+    logs_handler = __LOG_FILE_HANDLER__
+
+    console_handler.setFormatter(__LOG_FORMATTER__)
+    logs_handler.setFormatter(__LOG_FORMATTER__)
+
     logger.addHandler(console_handler)
-    logger.addHandler(logs_handler) if settings.DevConfigs.ENABLE_LOG_TO_FILE else None
+    logger.addHandler(logs_handler) if settings.ENABLE_LOG_TO_FILE else None
 
     return logger
+
+def set_logging_configuration():
+    for logger in __LOGGER_LIST__:
+        logger.setLevel(settings.LOGGING_LEVEL)
+        logger.removeHandler(__LOG_FILE_HANDLER__) if not settings.ENABLE_LOG_TO_FILE else None
 
 # parses and returns the packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really
