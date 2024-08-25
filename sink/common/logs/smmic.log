@@ -1,5 +1,3 @@
-2024-08-20 23:20:09 - INFO - PING 192.168.1.1 - Packets: 5 sent, 5 received, 0% loss - RTT: 0.599 (min), 0.821 (avg), 1.035 (max), 0.154 (mdev)
-2024-08-20 23:20:36 - WARNING - PING 192.168.1.1 - Packets: 5 sent, 5 received, 0% loss - RTT: 0.830 (min), 0.883 (avg), 0.932 (max), 0.038 (mdev)
-2024-08-20 23:20:48 - ERROR - PING 192.168.1.1 - Packets: 5 sent, 5 received, 0% loss - RTT: 0.606 (min), 0.774 (avg), 0.961 (max), 0.131 (mdev)
-2024-08-20 23:21:03 - CRITICAL - PING 192.168.1.1 - Packets: 5 sent, 5 received, 0% loss - RTT: 0.576 (min), 0.819 (avg), 0.968 (max), 0.152 (mdev)
-2024-08-20 23:21:31 - WARNING - PING 192.168.1.1 - Packets: 5 sent, 5 received, 0% loss - RTT: 0.412 (min), 0.644 (avg), 0.953 (max), 0.194 (mdev)
+2024-08-25 23:07:37 - INFO - Starting application in normal mode with INFO level logging
+2024-08-25 23:07:37 - INFO - Interface 'enp4s0' with active IP address 192.168.1.10
+2024-08-25 23:07:41 - INFO - Network check successful, proceeding with normal operation
