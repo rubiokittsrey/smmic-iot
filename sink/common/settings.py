@@ -32,8 +32,12 @@ def enable_log_to_file(value):
 # development configurations
 # class DevConfigs:
 
-# application configurations
+# application configurations 
 class APPConfigurations:
+    MQTT_PW = settings["app_configurations"]["mqtt_pwd"]
+    MQTT_USERNAME = settings["app_configurations"]["mqtt_username"]
+
+    CLIENT_ID = settings["app_configurations"]["client_id"]
     NETWORK_INTERFACE = __app_net_configs__["primary_interface"]
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]

@@ -36,13 +36,13 @@ connected = 0
 
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
-client.message_callback_add(topic, callback_mqtt_test)
+client.message_callback_add("#", callback_mqtt_test)
 client.connect(Broker.HOST, Broker.PORT)
-client.loop_start()
 client.subscribe(topic)
-client.subscribe(settings.DevTopics.TEST)
+client.subscribe(DevTopics.TEST)
+client.loop_start()
 
 while True:
-    time.sleep(5)
     if (connected != 1):
         print("attempting connection with mqtt server")
+        time.sleep(5)

@@ -13,6 +13,19 @@ import utils
 def on_pub(client, userdata, mid):
     print(f"data published: {msg}")
 
+def publish(client: mqtt.Client, topic):
+    global msg
+    try:
+        msg  = str(secrets.token_urlsafe(16))
+        payload=str(msg)
+        pub=client.publish(
+            topic=topic,
+            payload=payload.encode('utf-8'),
+            qos=1)
+        pub.wait_for_publish()
+    except Exception as e:
+        print(e)
+
 def mqtt_loop_test(topic):
     client = mqtt.Client("test-pub")
     client.on_publish = on_pub
@@ -20,21 +33,9 @@ def mqtt_loop_test(topic):
     client.loop_start()
 
     while True:
-        global msg
-        msg  = str(secrets.token_urlsafe(16))
-        try:
-            payload=str(msg)
-            pub=client.publish(
-                topic=topic,
-                payload=payload.encode('utf-8'),
-                qos=1,
-            )
-            pub.wait_for_publish()
-
-        except Exception as e:
-            print(e)
-
-        time.sleep(10)
+        publish(client, topic)
+        publish(client, DevTopics.TEST)
+        time.sleep(7)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a publish test on the MQTT network")
