@@ -1,3 +1,4 @@
 2024-08-25 23:07:37 - INFO - Starting application in normal mode with INFO level logging
 2024-08-25 23:07:37 - INFO - Interface 'enp4s0' with active IP address 192.168.1.10
 2024-08-25 23:07:41 - INFO - Network check successful, proceeding with normal operation
+2024-08-26 20:29:00 - INFO - Starting in development mode - VERBOSE logging enabled, logging to file disabled

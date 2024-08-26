@@ -54,6 +54,7 @@ def __ping__(host, repeat=1) -> Tuple[str, ...]:
     return sent, received, loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time
 
 # handles connection problems by timing out processes
+# TODO: refactor this function and implement to network check
 def __time_out_handler__(function):
     # the default timeout duration on disconnected, ideally this should be 5 minutes
     # value is configured in settings.yaml
@@ -93,34 +94,6 @@ def network_check() -> bool:
         log.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}!')
         return False
 
+    #TODO: run internet check to verify internet connectivity
+
     return True
-
-        
-# returns the ip and in the interface of the device
-# returns a false value if a critical function returns with failure
-# # NOTE: use this function to check on network status whenever a network operation fails
-# def __init_check__():
-#     # interfaces check
-#     # look for interfaces other than 'lo' and checks if any is UP
-    
-#     ip, interface = __check_interface__()
-#     if(not ip):
-#         return False, interface
-
-#     # ping check with gateway
-#     # NOTE: gateway is configured in settings.yaml
-#     log.info(f'Checking network connectivity with access point {settings.APPConfigurations.GATEWAY}')
-#     ping_check = __ping__(settings.APPConfigurations.GATEWAY)
-#     if(ping_check.count(False) >= 3):
-#         log.warning(f'PING check returned with {ping_check.count(False) - 5} successful pings out of 5')
-#     elif(ping_check.count(False) == 5):
-#         log.warning(f'Cannot establish successful PING with gateway {ip}: {ping_check.count(False) - 5} out of 5 PINGS failed')
-#         return False, interface
-    
-#     return ip, interface
-
-# def network_check():
-#     ip, interface = __check_interface__()
-#     if (not ip):
-#         log.critical(f'Critical error at hardware.network.py.__init_network() terminating execution of main process')
-#         return False

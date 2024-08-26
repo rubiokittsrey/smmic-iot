@@ -16,6 +16,7 @@ __api_endpoints__ = settings["api_routes"]["endpoints"]
 __api_configs__ = settings["api_configurations"]
 __broker_configs__ = settings["broker"]
 __dev_configs__ = settings["dev_configs"]
+__smmic_topics__ = settings["topics"]
 
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
@@ -27,16 +28,6 @@ def set_logging_level(level):
 def enable_log_to_file(value):
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
-
-class status:
-    INFO = 100
-    SUCCESS = 200
-    ERROR = 400
-    WARNING = 300
-    CRITICAL = 500
-    ACTIVE = SUCCESS
-    INACTIVE = WARNING
-    FAILED = ERROR
 
 # development configurations
 # class DevConfigs:
@@ -77,12 +68,12 @@ class DevTopics:
 # mqtt functional topics
 class SensorTopics:
     #BROADCAST = "/broadcast"
-    DATA = f"{__broker_configs__["root_topic"]}/sensor/+/data"
-    ALERT = f"{__broker_configs__["root_topic"]}/sensor/+/alert"
+    DATA = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sensor"]["data"]}"
+    ALERT = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sensor"]["alert"]}"
 
 class SinkTopics:
-    ALERT = f"{__broker_configs__["root_topic"]}/sink/alert"
+    ALERT = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sink"]["alert"]}"
 
 class AdminTopics:
-    SETTINGS = f"{__broker_configs__["root_topic"]}/admin/settings/#" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
-    COMMANDS = f"{__broker_configs__["root_topic"]}/admin/commands"
+    SETTINGS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["settings"]}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
+    # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS

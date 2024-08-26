@@ -1,4 +1,4 @@
-# ignore every environment / config files
-
+*.log
 sink/settings.yaml
 .vscode
+/sink/common/logs
