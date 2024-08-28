@@ -1,13 +1,15 @@
+# mqtt module unit tests
 import sys
 import settings
 
 sys.path.append(settings.APPConfigurations.SRC_PATH)
 
-from mqtt import service, client
+import mqtt.client as client
+import mqtt.service as service
 from utils import Modes
 import argparse
 
-# debugging
+# terminal debugging
 if __name__ == "__main__":
     Modes.dev()
 
@@ -24,7 +26,7 @@ if __name__ == "__main__":
 
     # client module parsers
     client_subparser = parser_client.add_subparsers(dest="function")
-    client_func = client_subparser.add_parser("client", help="Test the client function of the client module")
+    client_func = client_subparser.add_parser("get_client", help="Test the client function of the client module")
 
     # parse arguments
     args = parser.parse_args()
@@ -37,5 +39,6 @@ if __name__ == "__main__":
         if not args.function or args.function == "status_check":
             service.mqtt_status_check()
     elif args.module == "client":
-        if args.function == "client":
-            client.client()
+        if args.function == "get_client":
+            callback = client.get_client()
+            #TODO: handle connection testing with the callback client

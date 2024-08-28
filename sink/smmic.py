@@ -3,14 +3,11 @@
 # other packages
 import logging
 import argparse
-import paho.mqtt.client as mqtt
+import os
 
 # modules from packages in smmic
 from src.hardware import network
-from src.mqtt import service, client
-import os
-import asyncio
-import time
+from src.mqtt import service
 
 # smmic commons
 from utils import log_config, set_logging_configuration, Modes, status
@@ -18,10 +15,8 @@ from settings import Broker
 
 log = log_config(logging.getLogger(__name__))
 
-def test_callback(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
-    log.info(f'Test topic ({msg.topic}) payload: {str(msg.payload.decode('utf-8'))}')
-
 # initialize system, perform checks
+# initialize the mqtt callback client
 def init():
     # network check, check interfaces, ping gateway
     net_check = network.network_check()
@@ -36,17 +31,6 @@ def init():
     mqtt_status = service.mqtt_status_check()
     if mqtt_status == status.INACTIVE or mqtt_status == status.FAILED:
         os._exit(0)
-
-    # client initialization
-    callback_client = client.client()
-    callback_client.message_callback_add("/dev/test", test_callback)
-
-    #TODO: implement proper loop for callback function using concurrency
-    callback_client.loop_start()
-    while True:
-        if not client.CONNECTED:
-            log.info(f'Attempting connection with broker at {Broker.HOST}:{Broker.PORT}')
-            time.sleep(5)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The main module of the SMMIC application for the Raspberry Pi 4")
@@ -84,3 +68,5 @@ if __name__ == "__main__":
             Modes.debug()
 
         init()
+
+        #TODO: start processes here

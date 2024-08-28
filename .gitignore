@@ -1,4 +1,4 @@
 *.log
 sink/settings.yaml
 .vscode
-/sink/common/logs
+sink/common/logs/smmic.log

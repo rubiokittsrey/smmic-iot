@@ -31,7 +31,7 @@ def on_disconnect(client, userdata, rc):
 def callback_mqtt_test(client, userdata, msg):
     print(f"payload: {str(msg.payload.decode('utf-8'))} ({msg.topic})")
 
-client = mqtt.Client("test-sub")
+client = mqtt.Client(client_id="ggg")
 connected = 0
 
 client.on_connect = on_connect
