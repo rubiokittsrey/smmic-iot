@@ -25,7 +25,7 @@ def init():
         #TODO: handle no internet connection scenario
     else:
         log.info(f'Network check successful, proceeding under normal operating conditions')
-
+        
     # mosquitto service check
     # terminate program if mosquitto_service_check() returns INACTIVE or FAILED status
     mqtt_status = service.mqtt_status_check()

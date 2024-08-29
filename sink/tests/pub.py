@@ -6,9 +6,13 @@ import time
 import paho.mqtt.client as mqtt
 import secrets
 import argparse
+import logging
 
 from settings import Broker, DevTopics
-import utils
+from src.mqtt import client
+from utils import log_config
+
+log = log_config(logging.getLogger(__name__))
 
 def on_pub(client, userdata, mid):
     print(f"data published: {msg}")
@@ -26,8 +30,12 @@ def publish(client: mqtt.Client, topic):
     except Exception as e:
         print(e)
 
-def mqtt_loop_test(topic):
-    client = mqtt.Client("test-pub")
+def init_client() -> mqtt.Client:
+    callback_client = client.get_client()
+    if not callback_client:
+        log.error('src.mqtt.client.get_client() returned empty or without a valid client')
+
+def mqtt_loop_test(callback_client: mqtt.Client, topic) -> None:
     client.on_publish = on_pub
     client.connect(Broker.HOST, Broker.PORT)
     client.loop_start()
@@ -42,4 +50,5 @@ if __name__ == "__main__":
     parser.add_argument("--topic", type=str, help="Specify a different topic to test publish (other than the default test topic)", default=DevTopics.TEST)
 
     args = parser.parse_args()
-    mqtt_loop_test(args.topic)
+    callback_client = init_client()
+    mqtt_loop_test(callback_client, args.topic)

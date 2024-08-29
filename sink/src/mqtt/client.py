@@ -42,6 +42,9 @@ def __on_disconnected__(client, userdata, rc):
 def __on_subscribe__(client: mqtt.Client, userdata: mqtt.Client.user_data_set, mid, granted_qos):
     log.info(f'Subscribed to topic {__curent_topic__}')
 
+def __on_publish__(client: mqtt.Client, userdata: mqtt.Client.user_data_get, mid, granted_qos):
+    log.info(f'Published data:') #TODO: add message here
+
 # main client function
 def get_client() -> mqtt.Client:
     client = __init_client__()
