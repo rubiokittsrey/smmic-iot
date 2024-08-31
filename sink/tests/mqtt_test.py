@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # parse arguments
     args = parser.parse_args()
 
-    if not args.module:
+    if not args.module:                              
         parser.print_help()
         parser_service.print_help()
         parser_client.print_help()

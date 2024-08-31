@@ -8,13 +8,13 @@ import logging
 
 # settings, utils
 from settings import Broker, SensorTopics, SinkTopics, AdminTopics, APPConfigurations, DevTopics
-import settings
-from utils import log_config, Modes
+from utils import log_config
 
 CONNECTED = False
-__curent_topic__ = None
 
 log = log_config(logging.getLogger(__name__))
+
+__subscriptions__ = []
 
 def __init_client__() -> mqtt.Client:
     client = None
@@ -38,27 +38,37 @@ def __on_disconnected__(client, userdata, rc):
     CONNECTED = False
     log.warning(f'Callback client \'{APPConfigurations.CLIENT_ID}\' has been disconnected from broker at {Broker.HOST}:{Broker.PORT}')
 
-# TODO: fix this callback
-def __on_subscribe__(client: mqtt.Client, userdata: mqtt.Client.user_data_set, mid, granted_qos):
-    log.info(f'Subscribed to topic {__curent_topic__}')
-
 def __on_publish__(client: mqtt.Client, userdata: mqtt.Client.user_data_get, mid, granted_qos):
     log.info(f'Published data:') #TODO: add message here
 
+def __subscribe__(client: mqtt.Client):
+    topics = [SensorTopics.ALERT, SensorTopics.DATA, SinkTopics.ALERT, AdminTopics.SETTINGS, DevTopics.TEST]
+
+    for topic in topics:
+        client.subscribe(topic)
+
+# TODO: fix this callback
+def __on_subscribe__(client: mqtt.Client, userdata: mqtt.Client.user_data_set, mid, reason_code_list):
+    log.info(f'Subscribed')
+
 # main client function
+# this function returns the already connected and 'loop_started' callback client for the smmic application
+# NOTE: for that reason, this client should run within its own concurrent task or thread (arguably the thread option is better)
+# NOTE that only one instance of **THIS** client may be used for the entire application on runtime
+# calling another instance of this elsewhere while another is already up will result in race conditions
+# TODO: include error handling for when another instance is called using a global counter flag
 def get_client() -> mqtt.Client:
     client = __init_client__()
 
     # register client configurations and callbacks
     if APPConfigurations.MQTT_USERNAME and APPConfigurations.MQTT_PW: # set password and username if exists
         client.username_pw_set(username=APPConfigurations.MQTT_USERNAME, password=APPConfigurations.MQTT_PW)
-    client.on_connect = __on_connected__
     client.on_disconnect = __on_disconnected__
-    
-    ### client.on_subscribe = __on_subscribe__ #TODO: fix on_subscribe topic log bug
+    client.on_connect = __on_connected__
 
-    ## connect the client
-    # client.connect(Broker.HOST, Broker.PORT)
-    # __subscribe__(client=client)
+    client.connect(Broker.HOST, Broker.PORT)
+    __subscribe__(client)
+    client.loop_start()
+    client.on_subscribe = __on_subscribe__ #TODO: fix on_subscribe topic log bug
 
     return client

@@ -5,11 +5,27 @@
 import paho.mqtt.client as mqtt
 import time
 import argparse
-import settings
+import sys
+import logging
 
-from settings import Broker, DevTopics
+from settings import Broker, DevTopics, APPConfigurations
+sys.path.append(APPConfigurations.SRC_PATH)
+
+from mqtt import client
+from utils import log_config
+
+log = log_config(logging.getLogger(__name__))
 
 topic = None
+
+def callback_mqtt_test(client, userdata, msg):
+    print(f"payload: {str(msg.payload.decode('utf-8'))} ({msg.topic})")
+
+def init_client() -> mqtt.Client:
+    callback_client = client.get_client()
+    if not callback_client:
+        log.error(f'src.mqtt.client.get_client() did not return with a valid client')
+    return callback_client
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run a subscribe test on the MQTT network")
@@ -18,31 +34,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     topic = args.topic
 
-def on_connect(client, userData, flags, rc):
-    global connected # connected flag
-    connected = 1
-    print("connected to mqtt server... subscribing")
+    callback_client = init_client()
 
-def on_disconnect(client, userdata, rc):
-    global connected
-    connected = 0
-    print("disconnected from mqtt server")
+    callback_client.message_callback_add("#", callback_mqtt_test)
 
-def callback_mqtt_test(client, userdata, msg):
-    print(f"payload: {str(msg.payload.decode('utf-8'))} ({msg.topic})")
-
-client = mqtt.Client(client_id="ggg")
-connected = 0
-
-client.on_connect = on_connect
-client.on_disconnect = on_disconnect
-client.message_callback_add("#", callback_mqtt_test)
-client.connect(Broker.HOST, Broker.PORT)
-client.subscribe(topic)
-client.subscribe(DevTopics.TEST)
-client.loop_start()
-
-while True:
-    if (connected != 1):
-        print("attempting connection with mqtt server")
+    while True:
         time.sleep(5)
