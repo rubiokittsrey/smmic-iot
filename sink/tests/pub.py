@@ -10,6 +10,8 @@ import logging
 import sys
 
 from settings import Broker, DevTopics, APPConfigurations
+from utils import Modes
+
 sys.path.append(APPConfigurations.SRC_PATH)
 
 from mqtt import client
@@ -20,7 +22,7 @@ log = log_config(logging.getLogger(__name__))
 def on_pub(client, userdata, mid):
     print(f"data published: {msg}")
 
-def publish(client: mqtt.Client, topic):
+def publish(client: mqtt.Client, topic) -> bool:
     global msg
     try:
         msg  = str(f'smmic.pub.py client: {secrets.token_urlsafe(16)}')
@@ -30,8 +32,10 @@ def publish(client: mqtt.Client, topic):
             payload=payload.encode('utf-8'),
             qos=1)
         pub.wait_for_publish()
-    except Exception as e:
+        return True
+    except Exception as e: 
         print(e)
+        return False
 
 def init_client() -> mqtt.Client:
     callback_client = client.get_client()
@@ -40,6 +44,8 @@ def init_client() -> mqtt.Client:
     return callback_client
 
 if __name__ == "__main__":
+    Modes.dev()
+
     parser = argparse.ArgumentParser(description="Run a publish test on the MQTT network")
     parser.add_argument("--topic", type=str, help="Specify a different topic to test publish (other than the default test topic)", default=DevTopics.TEST)
 

@@ -28,6 +28,8 @@ class status:
     ACTIVE = SUCCESS
     INACTIVE = WARNING
     FAILED = ERROR
+    CONNECTED = ACTIVE
+    DISCONNTECTED = INACTIVE
 
 # LOGGING UTILITIES ------------------------------------------------------------------------------------
 # returns the logger object from caller with fromatter, console handler and file handler

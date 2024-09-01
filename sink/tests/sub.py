@@ -8,7 +8,9 @@ import argparse
 import sys
 import logging
 
-from settings import Broker, DevTopics, APPConfigurations
+from settings import DevTopics, APPConfigurations
+from utils import Modes
+
 sys.path.append(APPConfigurations.SRC_PATH)
 
 from mqtt import client
@@ -28,6 +30,8 @@ def init_client() -> mqtt.Client:
     return callback_client
 
 if __name__ == "__main__":
+    Modes.dev()
+    
     parser = argparse.ArgumentParser(description="Run a subscribe test on the MQTT network")
     parser.add_argument("--topic", type=str, help="Specify a different topic to test subscribe (other than the default test topic)", default=DevTopics.TEST)
 

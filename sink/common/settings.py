@@ -81,3 +81,14 @@ class SinkTopics:
 class AdminTopics:
     SETTINGS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["settings"]}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
     # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS
+
+# returns two lists of ** all ** available topics
+# one for application topics the other for system topics
+def get_topics() -> list:
+    app_topics = [DevTopics.TEST, SensorTopics.DATA, SensorTopics.ALERT, SinkTopics.ALERT, AdminTopics.SETTINGS]
+    
+    # TODO: see what $SYS topics to add for sink node data
+    # return this with app_topics when thats done ^
+    sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
+
+    return app_topics, []
