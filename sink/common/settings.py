@@ -3,6 +3,7 @@
 import os
 import yaml
 import logging
+from typing import Tuple
 
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 
@@ -84,7 +85,7 @@ class AdminTopics:
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics
-def get_topics() -> list:
+def get_topics() -> Tuple[list, list]:
     app_topics = [DevTopics.TEST, SensorTopics.DATA, SensorTopics.ALERT, SinkTopics.ALERT, AdminTopics.SETTINGS]
     
     # TODO: see what $SYS topics to add for sink node data

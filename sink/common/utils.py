@@ -29,7 +29,7 @@ class status:
     INACTIVE = WARNING
     FAILED = ERROR
     CONNECTED = ACTIVE
-    DISCONNTECTED = INACTIVE
+    DISCONNECTED = INACTIVE
 
 # LOGGING UTILITIES ------------------------------------------------------------------------------------
 # returns the logger object from caller with fromatter, console handler and file handler
@@ -56,7 +56,7 @@ def set_logging_configuration():
 
 # parses and returns the packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really
-def parse_ping(output) -> Tuple[str, ...]:
+def parse_ping(output) -> Tuple[str | None, ...]:
     output_decoded = output.decode('utf-8')
 
     # patterns
@@ -79,7 +79,7 @@ def parse_ping(output) -> Tuple[str, ...]:
 
     return packets_sent, packets_recieved, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev
 
-def parse_err_ping(output) -> Tuple[str, ...]:
+def parse_err_ping(output) -> Tuple[str | None, ...]:
     sent = received = errors = time = None
 
     output_decoded = output.decode('utf-8')
@@ -106,16 +106,16 @@ def parse_err_ping(output) -> Tuple[str, ...]:
 
 # application modes
 class Modes:
-    def dev():
+    def dev(): #type: ignore
         settings.set_logging_level(logging.DEBUG)
         settings.enable_log_to_file(False)
         set_logging_configuration()
-    def normal():
+    def normal(): #type: ignore
         settings.set_logging_level(logging.WARNING)
         set_logging_configuration()
-    def info():
+    def info(): #type: ignore
         settings.set_logging_level(logging.INFO)
         set_logging_configuration()
-    def debug():
+    def debug(): #type: ignore
         settings.set_logging_level(logging.DEBUG)
         set_logging_configuration()

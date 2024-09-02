@@ -5,6 +5,7 @@ import argparse
 import sys
 import logging
 import time
+import os
 import asyncio
 
 # internal
@@ -12,7 +13,7 @@ import settings
 sys.path.append(settings.APPConfigurations.SRC_PATH)
 import mqtt.client as client
 import mqtt.service as service
-from utils import Modes, log_config
+from utils import Modes, log_config, status
 import pub
 import sub
 
@@ -71,17 +72,29 @@ if __name__ == "__main__":
                 while True:
                     if client.CALLBACK_CLIENT:
                         client.CALLBACK_CLIENT.message_callback_add("#", sub.callback_mqtt_test)
-                        if pub.publish(client.CALLBACK_CLIENT, settings.DevTopics.TEST):
-                            None
+                        if client.CLIENT_STAT == status.CONNECTED:
+                            try:
+                                pub.publish(client.CALLBACK_CLIENT, settings.DevTopics.TEST)
+                            except Exception as e:
+                                __log__.error(f'Callback client from client module was unable to published message to topic: {settings.DevTopics.TEST} ({e})')
+                        elif client.CLIENT_STAT == status.FAILED: 
+                            # TODO: fix this condition (idea: implement queues?)
+                            __log__.error(f'SMMIC callback client status failed, terminating mqtt_test.start_c_pub_task() at {os.getpid()}')
+                            break
                         else:
-                            __log__.error(f'Callback client from client module was unable to publishe message to topic: {settings.DevTopics.TEST}')
+                            __log__.warning(f'Unable to publish message to topic: {settings.DevTopics.TEST} (client not connected)')
                     await asyncio.sleep(5)
             
             async def start_c_client_test():
+                __log__.debug(f'Running mqtt_test.start_callback_client() at PID: {os.getpid()}')
                 c_cli = asyncio.create_task(client.start_callback_client())
                 pub_task = asyncio.create_task(start_c_pub_task())
-
-                await asyncio.gather(c_cli, pub_task)
+                task_list = [c_cli, pub_task]
+                try:
+                    await asyncio.gather(*task_list)
+                except asyncio.CancelledError:
+                    __log__.warning(f'raised KeyboardInterrupt, cancelling mqtt_test.start_call_client() at PID: {os.getpid()}')
+                    await asyncio.gather(client.__shutdown_disconnect__())
                 
             asyncio.run(start_c_client_test())
 

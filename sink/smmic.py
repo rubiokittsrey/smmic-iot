@@ -33,6 +33,9 @@ def init():
         os._exit(0)
 
 if __name__ == "__main__":
+    if os.system('cls') != 0:
+        os.system('clear')
+
     parser = argparse.ArgumentParser(description="The main module of the SMMIC application for the Raspberry Pi 4")
     subparser = parser.add_subparsers(dest='command')
 

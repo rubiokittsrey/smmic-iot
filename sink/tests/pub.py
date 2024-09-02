@@ -2,20 +2,20 @@
 # example: python test_pub.py --topic "/topic/to/test"
 # default topic (without --topic argument) will use MQTTDevTopics.TEST from configs.yaml
 
+# third-party
 import time
 import paho.mqtt.client as mqtt
 import secrets
 import argparse
 import logging
 import sys
+import os
 
+# internal
 from settings import Broker, DevTopics, APPConfigurations
-from utils import Modes
-
 sys.path.append(APPConfigurations.SRC_PATH)
-
 from mqtt import client
-from utils import log_config
+from utils import log_config, Modes
 
 log = log_config(logging.getLogger(__name__))
 
@@ -37,10 +37,12 @@ def publish(client: mqtt.Client, topic) -> bool:
         print(e)
         return False
 
-def init_client() -> mqtt.Client:
-    callback_client = client.get_client()
+# TODO: refactor this unit test!!!!
+def init_client() -> mqtt.Client | None:
+    client.start_callback_client()
     if not callback_client:
         log.error('src.mqtt.client.get_client() returned empty or without a valid client')
+        return None
     return callback_client
 
 if __name__ == "__main__":
@@ -51,6 +53,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     callback_client = init_client()
+
+    if not callback_client:
+        os._exit(0)
 
     while True:
         time.sleep(10)
