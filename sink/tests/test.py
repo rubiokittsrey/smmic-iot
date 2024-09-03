@@ -41,10 +41,13 @@ log = log_config(logging.getLogger(__name__))
 global MSG_QUEUE
 
 def task_manager():
+    log.debug(f"test.task_manager() function executing @ PID {os.getpid()}")
+    log.debug(f"client status: {client.CLIENT_STAT}")
     while True:
-        if client.CLIENT_STAT == status.CONNECTED:
+        if client.CALLBACK_CLIENT.is_connected():
             client.CALLBACK_CLIENT.publish(settings.DevTopics.TEST, "757575757575")
         time.sleep(5)
+        log.debug(f"still not publishing")
 
 def redirect_queue(client: paho_mqtt.Client, userdata, message: paho_mqtt.MQTTMessage):
     log.debug(f"Payload received: {str(message.payload.decode('utf-8'))} from topic {message.topic}")
@@ -68,8 +71,15 @@ if __name__ == "__main__":
     c_client = multiprocessing.Process(target=callback_client)
     
     # start processes
-    tsk_mngr.start()
-    c_client.start()
+    try:
+        tsk_mngr.start()
+        c_client.start()
+    except KeyboardInterrupt:
+        print(f'keyboardInterrupt raised')
+        tsk_mngr.terminate()
+        c_client.terminate()
+        tsk_mngr.join()
+        c_client.join()
 
     # join
     tsk_mngr.join()

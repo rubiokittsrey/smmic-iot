@@ -1,8 +1,0 @@
-2024-09-03 15:52:42 - DEBUG - Callback client successfully created: smmic-rpi-dev-client, 4
-2024-09-03 15:52:42 - INFO - Callback client attempting connection with broker: (0 attempts)
-2024-09-03 15:52:42 - INFO - Callback client connected to broker at localhost:1883
-2024-09-03 15:52:42 - DEBUG - Callback client subscribed to topic: /dev/test
-2024-09-03 15:52:42 - DEBUG - Callback client subscribed to topic: smmic/sensor/+/data
-2024-09-03 15:52:42 - DEBUG - Callback client subscribed to topic: smmic/sensor/+/alert
-2024-09-03 15:52:42 - DEBUG - Callback client subscribed to topic: smmic/sink/alert
-2024-09-03 15:52:42 - DEBUG - Callback client subscribed to topic: smmic/admin/settings/+/+

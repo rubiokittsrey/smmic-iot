@@ -7,6 +7,8 @@ import logging
 import time
 import os
 import asyncio
+import paho.mqtt.client as paho_mqtt
+from typing import Any
 
 # internal
 try:
@@ -74,36 +76,34 @@ if __name__ == "__main__":
         # publishes a message on /dev/test topic
         # receives messages from *all* other topics
         if args.function == "start_callback_client":
+            #TODO: implement events
             async def start_c_pub_task():
+                _callback_client = client.get_client()
+
                 while True:
-                    if client.CALLBACK_CLIENT:
-                        client.CALLBACK_CLIENT.message_callback_add("#", sub.callback_mqtt_test)
-                        if client.CLIENT_STAT == status.CONNECTED:
+                    if _callback_client:
+                        if _callback_client.is_connected():
                             try:
-                                pub.publish(client.CALLBACK_CLIENT, settings.DevTopics.TEST)
+                                pub.publish(_callback_client, settings.DevTopics.TEST)
                             except Exception as e:
                                 __log__.error(f'Callback client from client module was unable to published message to topic: {settings.DevTopics.TEST} ({e})')
                             except asyncio.CancelledError:
                                 __log__.warning(f'raised KeyboardInterrupt, cancelling mqtt_test.start_c_pub_task() at PID at PID {os.getpid()}')
-                        elif client.CLIENT_STAT == status.FAILED: 
-                            # TODO: fix this condition (idea: implement queues?)
-                            __log__.error(f'SMMIC callback client status failed, terminating mqtt_test.start_c_pub_task() at {os.getpid()}')
-                            break
                         else:
                             __log__.warning(f'Unable to publish message to topic: {settings.DevTopics.TEST} (client not connected)')
                     await asyncio.sleep(5)
-                    
+
             async def start_c_client_test():
                 #TODO: when this thread is terminated with KeyboardInterrupt, it throws a trace error
                 __log__.debug(f'Running mqtt_test.start_callback_client() at PID: {os.getpid()}')
-                c_cli = asyncio.create_task(client.start_callback_client())
+                c_cli = asyncio.create_task(client.start_client(sub.callback_mqtt_test))
                 pub_task = asyncio.create_task(start_c_pub_task())
                 task_list = [c_cli, pub_task]
                 try:
                     await asyncio.gather(*task_list)
                 except asyncio.CancelledError:
                     __log__.warning(f'raised KeyboardInterrupt, cancelling mqtt_test.start_call_client() at PID: {os.getpid()}')
-                    await asyncio.gather(client.__shutdown_disconnect__())
+                    await asyncio.gather(client.shutdown_client())
                 
             asyncio.run(start_c_client_test())
 
