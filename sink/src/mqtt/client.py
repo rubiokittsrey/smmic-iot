@@ -1,7 +1,5 @@
 """
 The callback client of the SMMIC sink node application.
-
-Because this module starts the client in a separate 
 """
 
 # the module that returns the one of isntance of the client the system should use on runtime
@@ -9,7 +7,6 @@ Because this module starts the client in a separate
 # ----- only one instance of this client should run in the entire application
 
 # third party
-import paho.mqtt.client as paho_mqtt
 from paho.mqtt import client as paho_mqtt, reasoncodes
 import time
 import logging
@@ -104,31 +101,19 @@ async def __shutdown_disconnect__() -> None:
     if not CALLBACK_CLIENT.is_connected():
         CALLBACK_CLIENT = None
 
-async def start_callback_client() -> None:
-    client = __init_client__()
-
-    if not client:
-        return
-
-    # set the username and password (if any)
-    if APPConfigurations.MQTT_USERNAME and APPConfigurations.MQTT_PW:
-        client.username_pw_set(username=APPConfigurations.MQTT_USERNAME, password=APPConfigurations.MQTT_PW)
-
-    client.on_disconnect = __on_disconnected__
-    client.on_connect = __on_connected__
-    client.on_publish = __on_publish__
-    client.on_subscribe = __on_subscribe__
+async def __loop_connect__(client: paho_mqtt.Client | None):
+    if not client: return
 
     try:
         client.connect(Broker.HOST, Broker.PORT)
     except Exception as e:
         __log__.error(f'Unable to establish successful connection with broker: {e}')
     __subscribe__(client)
+    client.loop_start()
 
     global CLIENT_STAT
     global CALLBACK_CLIENT
     CALLBACK_CLIENT = client
-    client.loop_start()
 
     # this while loop is important to keep the main thread alive
     # in the future, this could be another function that pings for broker information but this will do for now
@@ -145,6 +130,24 @@ async def start_callback_client() -> None:
         else:
             attempts = 0
         await asyncio.sleep(5)
+
+
+async def start_callback_client() -> None:
+    client = __init_client__()
+
+    if not client:
+        return
+
+    # set the username and password (if any)
+    if APPConfigurations.MQTT_USERNAME and APPConfigurations.MQTT_PW:
+        client.username_pw_set(username=APPConfigurations.MQTT_USERNAME, password=APPConfigurations.MQTT_PW)
+
+    client.on_disconnect = __on_disconnected__
+    client.on_connect = __on_connected__
+    client.on_publish = __on_publish__
+    client.on_subscribe = __on_subscribe__
+
+    await __loop_connect__(client)
 
 # NOTE: sep 2 2024
 # this is just trying out the pure asyncio approach, but given that the application will run

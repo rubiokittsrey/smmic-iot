@@ -1,10 +1,15 @@
 import sys
+
+sys.path.append('/mnt/d/projects/smmic-iot/sink/common')
+
 import settings
 
 sys.path.append(settings.APPConfigurations.SRC_PATH)
 
+import logging
+
 from hardware import network
-from utils import Modes
+from utils import Modes, log_config
 import argparse
 
 # debugging

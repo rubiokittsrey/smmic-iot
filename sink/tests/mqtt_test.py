@@ -9,6 +9,12 @@ import os
 import asyncio
 
 # internal
+try:
+    sys.path.append('/mnt/d/projects/smmic-iot/sink/common')
+except Exception as e:
+    print(f'Exception raised: {e}')
+    os._exit(0)
+
 import settings
 sys.path.append(settings.APPConfigurations.SRC_PATH)
 import mqtt.client as client
@@ -77,6 +83,8 @@ if __name__ == "__main__":
                                 pub.publish(client.CALLBACK_CLIENT, settings.DevTopics.TEST)
                             except Exception as e:
                                 __log__.error(f'Callback client from client module was unable to published message to topic: {settings.DevTopics.TEST} ({e})')
+                            except asyncio.CancelledError:
+                                __log__.warning(f'raised KeyboardInterrupt, cancelling mqtt_test.start_c_pub_task() at PID at PID {os.getpid()}')
                         elif client.CLIENT_STAT == status.FAILED: 
                             # TODO: fix this condition (idea: implement queues?)
                             __log__.error(f'SMMIC callback client status failed, terminating mqtt_test.start_c_pub_task() at {os.getpid()}')
@@ -84,8 +92,9 @@ if __name__ == "__main__":
                         else:
                             __log__.warning(f'Unable to publish message to topic: {settings.DevTopics.TEST} (client not connected)')
                     await asyncio.sleep(5)
-            
+                    
             async def start_c_client_test():
+                #TODO: when this thread is terminated with KeyboardInterrupt, it throws a trace error
                 __log__.debug(f'Running mqtt_test.start_callback_client() at PID: {os.getpid()}')
                 c_cli = asyncio.create_task(client.start_callback_client())
                 pub_task = asyncio.create_task(start_c_pub_task())

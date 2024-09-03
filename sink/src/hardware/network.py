@@ -32,12 +32,14 @@ def __check_interface__() -> Tuple[str, Optional[str]]:
                 if address.family == socket.AF_INET:
                     log.info(f'Interface \'{interface}\' with active IP address {address.address}')
                     ip = address.address
+    else:
+        log.warning(f'Interface check did not find the primary interface set in app configurations.')
 
     return interface, ip
 
 # ping the specified host for n amount of times
 # returns the ip, packets sent, packets received and the packet loss as well as rtt statistics
-def __ping__(host, repeat=1) -> Tuple[str, ...]:
+def __ping__(host, repeat=1) -> Tuple[str | None, ...]:
     sent = received = loss = rtt_min = rtt_avg = rtt_max = rtt_mdev = errors = time = None
 
     # repeat the PING command based on repeat parameter

@@ -73,14 +73,14 @@ class DevTopics:
 # mqtt functional topics
 class SensorTopics:
     #BROADCAST = "/broadcast"
-    DATA = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sensor"]["data"]}"
-    ALERT = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sensor"]["alert"]}"
+    DATA = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['data']}"
+    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['alert']}"
 
 class SinkTopics:
-    ALERT = f"{__broker_configs__["root_topic"]}{__smmic_topics__["sink"]["alert"]}"
+    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sink']['alert']}"
 
 class AdminTopics:
-    SETTINGS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["settings"]}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
+    SETTINGS = f"{__broker_configs__['root_topic']}{__smmic_topics__['admin']['settings']}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
     # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS
 
 # returns two lists of ** all ** available topics

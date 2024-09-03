@@ -2,3 +2,4 @@
 sink/settings.yaml
 .vscode
 sink/common/logs/smmic.log
+.win-dev-env
