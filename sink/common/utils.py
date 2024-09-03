@@ -3,6 +3,7 @@ import settings
 import os
 import re
 from typing import Tuple, Optional
+import logging
 
 # do not use
 def pretty_print(message, ):
@@ -19,6 +20,18 @@ __LOG_FILE_HANDLER__ = __logging__.FileHandler(log_path)
 __CONSOLE_HANDLER__ = __logging__.StreamHandler()
 __LOG_FORMATTER__ = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
+class status:
+    SUCCESS = 200
+    ERROR = 400
+    WARNING = 300
+    CRITICAL = 500
+    ACTIVE = SUCCESS
+    INACTIVE = WARNING
+    FAILED = ERROR
+    CONNECTED = ACTIVE
+    DISCONNECTED = INACTIVE
+
+# LOGGING UTILITIES ------------------------------------------------------------------------------------
 # returns the logger object from caller with fromatter, console handler and file handler
 def log_config(logger) -> __logging__.Logger:
     global __LOGGER_LIST__
@@ -43,7 +56,7 @@ def set_logging_configuration():
 
 # parses and returns the packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really
-def parse_ping(output) -> Tuple[str, ...]:
+def parse_ping(output) -> Tuple[str | None, ...]:
     output_decoded = output.decode('utf-8')
 
     # patterns
@@ -66,7 +79,9 @@ def parse_ping(output) -> Tuple[str, ...]:
 
     return packets_sent, packets_recieved, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev
 
-def parse_err_ping(output) -> Tuple[str, ...]:
+def parse_err_ping(output) -> Tuple[str | None, ...]:
+    sent = received = errors = time = None
+
     output_decoded = output.decode('utf-8')
     
     #patterns
@@ -80,22 +95,27 @@ def parse_err_ping(output) -> Tuple[str, ...]:
     errors_match = errors.search(output_decoded)
     time_match = time.search(output_decoded)
 
-    sent = received = errors = time = None
-
     #parsed data
-    if (packet_stats_match):
-        sent = packet_stats_match.group(1)
-        received = packet_stats_match.group(2)
-
-    if (packet_loss_match):
-        loss = packet_loss_match.group(1)
-        
-    if (errors_match):
-        errors = errors_match.group(1)
-
-    if (time_match):
-        time = time_match.group(1)
-
-    print(errors)
+    sent = packet_stats_match.group(1) if packet_stats_match else None
+    received = packet_stats_match.group(2) if packet_stats_match else None
+    loss = packet_loss_match.group(1) if packet_loss_match else None
+    errors = errors_match.group(1) if errors_match else None
+    time = time_match.group(1) if time_match else None
 
     return sent, received, loss, errors, time
+
+# application modes
+class Modes:
+    def dev(): #type: ignore
+        settings.set_logging_level(logging.DEBUG)
+        settings.enable_log_to_file(False)
+        set_logging_configuration()
+    def normal(): #type: ignore
+        settings.set_logging_level(logging.WARNING)
+        set_logging_configuration()
+    def info(): #type: ignore
+        settings.set_logging_level(logging.INFO)
+        set_logging_configuration()
+    def debug(): #type: ignore
+        settings.set_logging_level(logging.DEBUG)
+        set_logging_configuration()

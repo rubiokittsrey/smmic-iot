@@ -3,19 +3,21 @@
 import os
 import yaml
 import logging
+from typing import Tuple
 
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 
 with open(spath, 'r') as sfile:
-    settings = yaml.safe_load(sfile)
+    settings_yaml = yaml.safe_load(sfile)
 
-__app_net_configs__ = settings["app_configurations"]["network"]
-__test_configs__ = settings["app_configurations"]["tests"]
-__base_url__ = settings["api_routes"]["base_url"]
-__api_endpoints__ = settings["api_routes"]["endpoints"]
-__api_configs__ = settings["api_configurations"]
-__broker_configs__ = settings["broker"]
-__dev_configs__ = settings["dev_configs"]
+__app_net_configs__ = settings_yaml["app_configurations"]["network"]
+__test_configs__ = settings_yaml["app_configurations"]["tests"]
+__base_url__ = settings_yaml["api_routes"]["base_url"]
+__api_endpoints__ = settings_yaml["api_routes"]["endpoints"]
+__api_configs__ = settings_yaml["api_configurations"]
+__broker_configs__ = settings_yaml["broker"]
+__dev_configs__ = settings_yaml["dev_configs"]
+__smmic_topics__ = settings_yaml["topics"]
 
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
@@ -28,21 +30,15 @@ def enable_log_to_file(value):
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
 
-class status:
-    INFO = 100
-    SUCCESS = 200
-    ERROR = 400
-    WARNING = 300
-    CRITICAL = 500
-    ACTIVE = SUCCESS
-    INACTIVE = WARNING
-    FAILED = ERROR
-
 # development configurations
 # class DevConfigs:
 
-# application configurations
+# application configurations 
 class APPConfigurations:
+    MQTT_PW = settings_yaml["app_configurations"]["mqtt_pwd"]
+    MQTT_USERNAME = settings_yaml["app_configurations"]["mqtt_username"]
+
+    CLIENT_ID = settings_yaml["app_configurations"]["client_id"]
     NETWORK_INTERFACE = __app_net_configs__["primary_interface"]
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
@@ -58,7 +54,7 @@ class APPConfigurations:
 class APIRoutes:
     BASE_URL = __base_url__
     TEST_URL = __api_endpoints__["rpi_test"]
-    HEADERS = settings["headers"]
+    HEADERS = settings_yaml["headers"]
 
 # api configurations
 class APIConfigs:
@@ -77,12 +73,23 @@ class DevTopics:
 # mqtt functional topics
 class SensorTopics:
     #BROADCAST = "/broadcast"
-    DATA = f"{__broker_configs__["root_topic"]}/sensor/+/data"
-    ALERT = f"{__broker_configs__["root_topic"]}/sensor/+/alert"
+    DATA = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['data']}"
+    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['alert']}"
 
 class SinkTopics:
-    ALERT = f"{__broker_configs__["root_topic"]}/sink/alert"
+    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sink']['alert']}"
 
 class AdminTopics:
-    SETTINGS = f"{__broker_configs__["root_topic"]}/admin/settings/#" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
-    COMMANDS = f"{__broker_configs__["root_topic"]}/admin/commands"
+    SETTINGS = f"{__broker_configs__['root_topic']}{__smmic_topics__['admin']['settings']}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
+    # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS
+
+# returns two lists of ** all ** available topics
+# one for application topics the other for system topics
+def get_topics() -> Tuple[list, list]:
+    app_topics = [DevTopics.TEST, SensorTopics.DATA, SensorTopics.ALERT, SinkTopics.ALERT, AdminTopics.SETTINGS]
+    
+    # TODO: see what $SYS topics to add for sink node data
+    # return this with app_topics when thats done ^
+    sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
+
+    return app_topics, []
