@@ -19,8 +19,8 @@ __log__ = log_config(logging.getLogger(__name__))
 __subscriptions__ = []
 
 # global vars
-__CLIENT_STAT__ = status.DISCONNECTED
-__CALLBACK_CLIENT__: paho_mqtt.Client | None
+__CLIENT_STAT__: int = status.DISCONNECTED
+__CALLBACK_CLIENT__: paho_mqtt.Client | None = None
 
 # interal private function called upon to instantiate the smmic client object
 def __init_client__() -> paho_mqtt.Client | None:
@@ -84,6 +84,7 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
         _client.loop_start()
     except Exception as e:
         __log__.error(f"Unable to establish successful connection with broker: {e}")
+        return False
     __subscribe__(_client)
     
     __CLIENT_STAT__ = status.CONNECTED
@@ -92,13 +93,14 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     __CALLBACK_CLIENT__ = _client
 
     # add the message callback handler
-    _client.message_callback_add("#", _msg_handler)
+    _client.message_callback_add("/dev/test", _msg_handler)
+    _client.message_callback_add("smmic/#", _msg_handler)
 
     return True
 
 # handles failed connect attempt at startup
 def __on_connect_fail__(_client: paho_mqtt.Client, _userdata: Any):
-    time.sleep(APPConfigurations.NETWORK_TIMEOUT)
+    __log__.error(f"Attempting reconnect with broker")
 
     global __CLIENT_STAT__
 
@@ -141,7 +143,7 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
     _client.on_connect = __on_connected__
     _client.on_publish = __on_publish__
     _client.on_subscribe = __on_subscribe__
-    _client.on_connect_fail = __on_connect_fail__
+    #_client.on_connect_fail = __on_connect_fail__ #TODO fix on connect not executing (?)
 
     con = await __connect_loop__(_client, _msg_handler)
 
