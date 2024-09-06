@@ -8,7 +8,7 @@ import settings
 
 log = log_config(logging.getLogger(__name__))
 
-def mqtt_status_check() -> status:
+def mqtt_status_check() -> int:
     try:
         result = subprocess.run(
                 ['systemctl', 'status', 'mosquitto'],
@@ -30,3 +30,5 @@ def mqtt_status_check() -> status:
         #TODO: handle exception properly!
         log.info(f'An unhandled exception has occured: {e}')
         return status.FAILED
+    
+    return 0

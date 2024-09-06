@@ -31,7 +31,7 @@ class status:
     CONNECTED = ACTIVE
     DISCONNECTED = INACTIVE
 
-# LOGGING UTILITIES ------------------------------------------------------------------------------------
+# the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
 def log_config(logger) -> __logging__.Logger:
     global __LOGGER_LIST__

@@ -43,7 +43,7 @@ def __on_disconnected__(client: paho_mqtt.Client,
                         disconnect_flags: paho_mqtt.DisconnectFlags,
                         rc: reasoncodes.ReasonCode,
                         properties: properties.Properties) -> None:
-    __log__.warning(f"Callback client has been disconnected from broker: {rc} (disregard if expected)")
+    __log__.warning(f"Callback client has been disconnected from broker: {rc}")
 
 def __on_publish__(client: paho_mqtt.Client, userData: Any, mid: int, rc: reasoncodes.ReasonCode, prop: properties.Properties):
     # TODO: implement on publish, not sure what to do

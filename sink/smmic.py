@@ -32,6 +32,21 @@ def init():
     if mqtt_status == status.INACTIVE or mqtt_status == status.FAILED:
         os._exit(0)
 
+def sys_check():
+    # network check, check interfaces, ping gateway
+    net_check = network.network_check()
+    if not net_check:
+        log.critical(f'Network check returned with errors, terminating main process now')
+        #TODO: handle no internet connection scenario
+    else:
+        log.info(f'Network check successful, proceeding under normal operating conditions')
+        
+    # mosquitto service check
+    # terminate program if mosquitto_service_check() returns INACTIVE or FAILED status
+    mqtt_status = service.mqtt_status_check()
+    if mqtt_status == status.INACTIVE or mqtt_status == status.FAILED:
+        os._exit(0)
+
 if __name__ == "__main__":
     if os.system('cls') != 0:
         os.system('clear')
