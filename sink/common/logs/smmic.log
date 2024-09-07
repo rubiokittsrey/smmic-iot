@@ -1,17 +1,3 @@
-2024-09-06 20:09:25 - DEBUG - @ PID 66797 -> parent process running test.main()
-2024-09-06 20:09:25 - DEBUG - @ PID 66797 -> running callback client task loop
-2024-09-06 20:09:25 - DEBUG - Callback client successfully created: smmic-rpi-dev-client, 4
-2024-09-06 20:09:25 - DEBUG - Callback client connecting to broker @ 192.168.1.25:1883
-2024-09-06 20:09:25 - DEBUG - @ PID 66798 -> running test.task_manager() child process function
-2024-09-06 20:09:25 - INFO - Callback client connected to broker at 192.168.1.25:1883
-2024-09-06 20:09:25 - DEBUG - Callback client subscribed to topic: /dev/test
-2024-09-06 20:09:25 - DEBUG - Callback client subscribed to topic: smmic/sensor/+/data
-2024-09-06 20:09:25 - DEBUG - Callback client subscribed to topic: smmic/sensor/+/alert
-2024-09-06 20:09:25 - DEBUG - Callback client subscribed to topic: smmic/sink/alert
-2024-09-06 20:09:25 - DEBUG - Callback client subscribed to topic: smmic/admin/settings/+/+
-2024-09-06 20:09:26 - DEBUG - @ PID 66797 -> received KeyboardInterrupt, terminating test.run_task_manager() child process
-2024-09-06 20:09:26 - INFO - Performing shutdown on callback client @ PID: 66797
-2024-09-06 20:09:26 - DEBUG - Disconnecting callback client smmic-rpi-dev-client from broker @ ('192.168.1.25', 1883)
-2024-09-06 20:09:26 - DEBUG - Terminating callback client loop @ PID: 66797
-2024-09-06 20:09:26 - WARNING - Callback client has been disconnected from broker: Normal disconnection
-2024-09-06 20:09:26 - WARNING - @ PID 66797 -> exiting test.py
+2024-09-07 20:01:35 - INFO - Starting in normal mode with INFO level logging and logging to file enabled
+2024-09-07 20:01:35 - INFO - Performing system check
+2024-09-07 20:01:39 - WARNING - Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port 1883

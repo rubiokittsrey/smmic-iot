@@ -95,7 +95,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        Modes.debug()
+        Modes.dev()
         asyncio.run(main())
     except KeyboardInterrupt:
         __log__.warning(f"@ PID {os.getpid()} -> exiting test.py")

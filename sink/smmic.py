@@ -4,6 +4,8 @@
 import logging
 import argparse
 import os
+import asyncio
+from typing import Tuple
 
 # modules from packages in smmic
 from src.hardware import network
@@ -13,39 +15,45 @@ from src.mqtt import service
 from utils import log_config, set_logging_configuration, Modes, status
 from settings import Broker
 
-log = log_config(logging.getLogger(__name__))
+__log__ = log_config(logging.getLogger(__name__))
 
-# initialize system, perform checks
-# initialize the mqtt callback client
-def init():
-    # network check, check interfaces, ping gateway
-    net_check = network.network_check()
-    if not net_check:
-        log.critical(f'Network check returned with errors, terminating main process now')
-        #TODO: handle no internet connection scenario
-    else:
-        log.info(f'Network check successful, proceeding under normal operating conditions')
-        
-    # mosquitto service check
-    # terminate program if mosquitto_service_check() returns INACTIVE or FAILED status
-    mqtt_status = service.mqtt_status_check()
-    if mqtt_status == status.INACTIVE or mqtt_status == status.FAILED:
-        os._exit(0)
+# runs the system checks from the network and service modules
+# returns a tuple of status literals, core status and api connection status
+def sys_check() -> Tuple[int, int | None]:
+    # the core functions status, excluding the api connection status
+    core_status: int
+    # the api status
+    # NOTE: that is the api status is unsuccessful the system should still operate under limited functionalities
+    # i.e. store data locally (and only until uploaded to api)
+    api_status: int | None = None
 
-def sys_check():
-    # network check, check interfaces, ping gateway
+    __log__.info(f"Performing core system checks")
+
+    # perform the network check function from the network module
+    # check interface status, ping gateway to verify connectivity
     net_check = network.network_check()
-    if not net_check:
-        log.critical(f'Network check returned with errors, terminating main process now')
-        #TODO: handle no internet connection scenario
-    else:
-        log.info(f'Network check successful, proceeding under normal operating conditions')
+    if net_check == status.SUCCESS:
+        __log__.debug(f'Network check successful, checking mosquitto service status')
         
-    # mosquitto service check
-    # terminate program if mosquitto_service_check() returns INACTIVE or FAILED status
-    mqtt_status = service.mqtt_status_check()
-    if mqtt_status == status.INACTIVE or mqtt_status == status.FAILED:
-        os._exit(0)
+        # check mosquitto service status
+        # if mosquitto service check returns status.SUCCESS, proceed with api connection check
+        mqtt_status = service.mqtt_status_check()
+        if mqtt_status == status.ACTIVE:
+            # TODO: implement api connection function
+            # TODO: create no connection to api system protocols
+            core_status = status.SUCCESS
+            api_status = status.SUCCESS
+        else:
+            core_status = status.FAILED
+
+    else:
+        __log__.critical(f'Network check returned with errors, cannot proceed with operation')
+        core_status = status.FAILED
+
+    return core_status, api_status
+
+async def main():
+    __log__.warning(f"UNIMPLEMENTED smmic.main() function")
 
 if __name__ == "__main__":
     if os.system('cls') != 0:
@@ -74,17 +82,25 @@ if __name__ == "__main__":
             start.print_help()
         elif args.mode == 'dev':
             Modes.dev()
-            log.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
+            __log__.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
         elif args.mode == 'normal' or not args.mode:
-            log.info('Starting in normal mode with WARNING level logging and logging to file enabled')
+            __log__.info('Starting in normal mode with WARNING level logging and logging to file enabled')
             Modes.normal()
         elif args.mode == 'info':
-            log.info('Starting in normal mode with INFO level logging and logging to file enabled')
+            __log__.info('Starting in normal mode with INFO level logging and logging to file enabled')
             Modes.info()
         elif args.mode == 'debug':
-            log.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
+            __log__.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
             Modes.debug()
 
-        init()
+        # first, perform system checks
+        core_status, api_status = sys_check()
 
-        #TODO: start processes here
+        if core_status == status.FAILED:
+            __log__.critical(f"Core system check returned with failure, terminating main process now")
+            os._exit(0)
+        
+        if api_status == status.FAILED:
+            __log__.warning(f"Cannot establish communication with API (#TODO: handle this) <-----")
+
+        asyncio.run(main())
