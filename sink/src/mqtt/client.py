@@ -36,7 +36,7 @@ def __init_client__() -> paho_mqtt.Client | None:
 
 # internal callback functions
 def __on_connected__(client:paho_mqtt.Client, userData, flags, rc, properties) -> None:
-    __log__.info(f"Callback client connected to broker at {Broker.HOST}:{Broker.PORT}")
+    __log__.debug(f"Callback client connected to broker @ {Broker.HOST}:{Broker.PORT}")
 
 def __on_disconnected__(client: paho_mqtt.Client,
                         userData: Any,
@@ -79,7 +79,6 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     global __CALLBACK_CLIENT__
 
     try:
-        __log__.debug(f"Callback client connecting to broker @ {Broker.HOST}:{Broker.PORT}")
         _client.connect(Broker.HOST, Broker.PORT)
         _client.loop_start()
     except Exception as e:
@@ -146,7 +145,10 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
     #_client.on_connect_fail = __on_connect_fail__ #TODO fix on connect not executing (?)
 
     con = await __connect_loop__(_client, _msg_handler)
+    if con:
+        __log__.info(f"Callback client running and connected @ PID: {os.getpid()}")
 
+    # keep this client thread alive
     while True:
         await asyncio.sleep(0.5)
 

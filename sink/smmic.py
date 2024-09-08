@@ -3,12 +3,12 @@ import logging
 import argparse
 import os
 import asyncio
-from typing import Tuple
 import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
 import random
 import paho.mqtt.client as paho_mqtt
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+from typing import Tuple
 
 # internal core modules
 from src.hardware import network
@@ -48,20 +48,26 @@ def sys_check() -> Tuple[int, int | None]:
             api_status = status.SUCCESS
         else:
             core_status = status.FAILED
-
     else:
         __log__.critical(f'Network check returned with errors, cannot proceed with operation')
         core_status = status.FAILED
 
     return core_status, api_status
 
-async def worker(payload: str):
-    sleep_time = random.randint(1, 10)
-    await asyncio.sleep(sleep_time)
-    __log__.debug(f"@ PID {os.getpid()} -> test.worker() done with: {payload} after {sleep_time} seconds")
+# for topic '/dev/test'
+# a simple dummy function for testing concurrent task management
+async def dev_test_task(semaphore: asyncio.Semaphore, msg: dict) -> None:
+    # simulate task delay
+    duration = random.randint(1, 10)
+    async with semaphore:
+        await asyncio.sleep(duration)
+        __log__.debug(f"Task done @ PID {os.getpid()} (dev_test_task()): [mid: {msg['mid']}, topic: {msg['topic']}, payload: {msg['payload']}] after {duration} seconds")
 
-def get_msg_from_queue(queue: multiprocessing.Queue):
+# retrieves messages from the queue
+def from_queue_msg(queue: multiprocessing.Queue) -> dict | None:
     msg: dict | None = None
+
+    # try to get a message from the queue
     try:
         msg = queue.get(timeout=0.1)
     except Exception as e:
@@ -69,80 +75,145 @@ def get_msg_from_queue(queue: multiprocessing.Queue):
 
     return msg
 
-async def task_manager(queue: multiprocessing.Queue):
-    loop = asyncio.get_running_loop()
+# the task manager function
+# this is the function that should handle the messages incoming from the queue
+async def queue_monitor(queue: multiprocessing.Queue) -> None:
+    # testing out this semaphore count
+    # if the system experiences delay or decrease in performance, try to lessen this amount
+    semaphore = asyncio.Semaphore(10)
 
-    __log__.debug(f"@ PID {os.getpid()} -> running test.task_manager() child process function")
-    with ThreadPoolExecutor() as pool:
-        while True:
-            msg = await loop.run_in_executor(pool, get_msg_from_queue, queue)
-            
-            if msg:
-                __log__.debug(f"@ PID {os.getpid()} -> test.task_manager() received message from queue (topic: {msg["topic"]}, payload: {msg["payload"]})")
-                asyncio.create_task(worker(msg["payload"]))
+    loop: asyncio.AbstractEventLoop | None = None
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} task_manager() child process: {e}")
+        return
 
-            await asyncio.sleep(0.1)
+    if loop:
+        # use the threadpool executor to run the monitoring function function that retrieves data from the queue
+        with ThreadPoolExecutor() as pool:
+            while True:
+                # run message retrieval from queue in non-blocking way
+                msg = await loop.run_in_executor(pool, from_queue_msg, queue)
 
-def run_task_manager(queue: multiprocessing.Queue):
-    asyncio.run(task_manager(queue))
+                # if a message is retrieved, create a task to handle that message
+                # TODO: implement task handling for different types of messages
+                # TODO: maybe have this as a separate function
+                if msg:
+                    __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']}, payload: {msg['payload']})")
 
+                    # /dev/test topic
+                    if msg['topic'] == '/dev/test':
+                        asyncio.create_task(dev_test_task(semaphore, msg))
+
+                await asyncio.sleep(0.1)
+
+# runs the task_manager event loop
+# this loop is important to allow concurrent task execution
+def run_task_manager(msg_queue: multiprocessing.Queue) -> None:
+    loop: asyncio.AbstractEventLoop | None = None
+    try:
+        loop = asyncio.new_event_loop()
+    except Exception as e:
+        __log__.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (child process): {str(e)}")
+        os._exit(0)
+
+    # if loop event loop is present, run main()
+    if loop:
+        try:
+            loop.run_until_complete(queue_monitor(msg_queue))
+        except asyncio.CancelledError or KeyboardInterrupt:
+            __log__.error(f"Closing main() loop @ PID {os.getpid()}: KeyboardInterrupt")
+        except Exception as e:
+            __log__.error(f"Failed to run main loop: {str(e)}")
+        finally:
+            loop.close()
+
+# necessary handler class in order to include the usage of the Queue object in the message callback of the client
 class Handler:
-    def __init__(self, msg_queue: multiprocessing.Queue):
-        self.msg_queue: multiprocessing.Queue = msg_queue
-
-    def message_to_queue_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage):
+    def __init__(self, __msg_queue__: multiprocessing.Queue) -> None:
+        self.__msg_queue__: multiprocessing.Queue = __msg_queue__
+    
+    # the message callback function
+    # generally just routes the messages received by the client on relevant topics to the queue
+    # NOTE to self: can be scaled to do more tasks just in case
+    def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
         topic = message.topic
         payload = str(message.payload.decode('utf-8'))
-
-        __log__.debug(f"@ PID {os.getpid()} -> test.message_to_queue_callback received message @ topic {topic}: {payload}")
+        msg_id = message.mid
 
         try:
-            self.msg_queue.put({"topic": topic, "payload": payload})
+            self.__msg_queue__.put({'topic': topic, 'payload': payload, 'mid': msg_id})
         except Exception as e:
-            __log__.error(f"@ PID {os.getpid()} -> test.message_to_queue_callback() error routing message ('topic': {topic}, 'payload': {payload}) to queue: {e}")
+            __log__.warning(f"Failed routing message to queue (Handler.msg_callback()): ('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}")
 
         return
 
-async def main():
-    __log__.debug(f"@ PID {os.getpid()} -> parent process running test.main()")
-    
-    # the message queue where the two processes will communicate and the process object variable
+# the main function of this operation
+# and the parent process of the task manager process
+async def main(loop: asyncio.AbstractEventLoop) -> None:
+    __log__.debug(f"Executing smmic.main() @ PID {os.getpid()}")
+
+    # multiprocessing.Queue to communicate between task_manager and callback_client processes
     msg_queue = multiprocessing.Queue()
-    task_manager_p = None
+    task_manager_p: multiprocessing.Process | None = None
 
     try:
-        # first, spawn the task manager process
+        # first, spawn and run the task manager process
         task_manager_p = multiprocessing.Process(target=run_task_manager, args=(msg_queue,))
         task_manager_p.start()
 
-        __log__.debug(f"@ PID {os.getpid()} -> running callback client task loop")
-
         # pass the msg_queue to the handler object
-        # then create the callback_client task and pass the callback function from the handler object
+        # then create and run the callback_client task
+        # pass the callback method of the handler object
         handler = Handler(msg_queue)
-        callback_client_task = asyncio.create_task(client.start_client(handler.message_to_queue_callback))
+        callback_client_task = asyncio.create_task(client.start_client(handler.msg_callback))
 
+        # ensures that the callback_client task is done
+        # handle KeyboardInterrupt for graceful shutdown
         try:
             await asyncio.gather(callback_client_task)
         except asyncio.CancelledError or KeyboardInterrupt:
-            __log__.debug(f"@ PID {os.getpid()} -> received KeyboardInterrupt, terminating test.run_task_manager() child process")
+            __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
+
+            # terminate the task_manager process
             task_manager_p.terminate()
             task_manager_p.join()
-            
-            # disconnect and shutdown the callback client properly
+
+            # disconnect and shutdown the callback client loop
             await asyncio.gather(client.shutdown_client())
 
             raise
-        
-        # keep this thread alive
+
+        # keep the main thread alive
         while True:
             await asyncio.sleep(0.1)
-
+        
     except Exception as e:
-        __log__.error(f"@ PID {os.getpid()} -> error spawning test.task_manager() function process: {e}")
+        __log__.error(f"Parent process called exception error: {str(e)}")
+        os._exit(0)
+    
+    except asyncio.CancelledError or KeyboardInterrupt:
+        __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
-    except KeyboardInterrupt:
-        __log__.warning(f"@ PID {os.getpid()} -> received KeyboardInterrupt, terminating test.main() process")
+def run():
+    loop: asyncio.AbstractEventLoop | None = None
+    try:
+        loop = asyncio.new_event_loop()
+    except Exception as e:
+        __log__.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (main process): {str(e)}")
+        os._exit(0)
+
+    # if loop event loop is present, run main()
+    if loop:
+        try:
+            loop.run_until_complete(main(loop))
+        except asyncio.CancelledError or KeyboardInterrupt:
+            __log__.error(f"Closing main() loop @ PID {os.getpid()}: KeyboardInterrupt")
+        except Exception as e:
+            __log__.error(f"Failed to run main loop: {str(e)}")
+        finally:
+            loop.close()
 
 if __name__ == "__main__":
     if os.system('cls') != 0:
@@ -181,7 +252,7 @@ if __name__ == "__main__":
         elif args.mode == 'debug':
             __log__.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
             Modes.debug()
-
+        
         # first, perform system checks
         core_status, api_status = sys_check()
 
@@ -192,4 +263,7 @@ if __name__ == "__main__":
         if api_status == status.FAILED:
             __log__.warning(f"Cannot establish communication with API (#TODO: handle this) <-----")
 
-        asyncio.run(main())
+        try:
+            run()
+        except asyncio.CancelledError or KeyboardInterrupt:
+            __log__.warning(f"Shutting down")
