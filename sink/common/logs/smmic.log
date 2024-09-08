@@ -1,3 +1,0 @@
-2024-09-07 20:01:35 - INFO - Starting in normal mode with INFO level logging and logging to file enabled
-2024-09-07 20:01:35 - INFO - Performing system check
-2024-09-07 20:01:39 - WARNING - Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port 1883

@@ -1,11 +1,14 @@
 # third-party
 import asyncio
 import multiprocessing
+import multiprocessing.queues
 import os
 import sys
 import paho.mqtt.client as paho_mqtt
 import logging
 from typing import Any
+import random
+from concurrent.futures import ThreadPoolExecutor
 
 # internal
 # NOTE: for wsl development
@@ -19,18 +22,33 @@ from utils import log_config, Modes, status
 
 __log__ = log_config(logging.getLogger(__name__))
 
+async def worker(payload: str):
+    sleep_time = random.randint(1, 10)
+    await asyncio.sleep(sleep_time)
+    __log__.debug(f"@ PID {os.getpid()} -> test.worker() done with: {payload} after {sleep_time} seconds")
+
+def get_msg_from_queue(queue: multiprocessing.Queue):
+    msg: dict | None = None
+    try:
+        msg = queue.get(timeout=0.1)
+    except Exception as e:
+        __log__.error(f"@ PID {os.getpid()} -> test.task_manager() cannot get message from queue: {e}") if msg != None else None
+
+    return msg
+
 async def task_manager(queue: multiprocessing.Queue):
+    loop = asyncio.get_running_loop()
+
     __log__.debug(f"@ PID {os.getpid()} -> running test.task_manager() child process function")
-    while True:
-        try:
-            msg: dict = queue.get()
-        except Exception as e:
-            __log__.error(f"@ PID {os.getpid()} -> test.task_manager() cannot get message from queue: {e}")
+    with ThreadPoolExecutor() as pool:
+        while True:
+            msg = await loop.run_in_executor(pool, get_msg_from_queue, queue)
+            
+            if msg:
+                __log__.debug(f"@ PID {os.getpid()} -> test.task_manager() received message from queue (topic: {msg["topic"]}, payload: {msg["payload"]})")
+                asyncio.create_task(worker(msg["payload"]))
 
-        if msg:
-            __log__.debug(f"@ PID {os.getpid()} -> test.task_manager() received message from queue (topic: {msg["topic"]}, payload: {msg["payload"]})")
-
-        await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1)
 
 def run_task_manager(queue: multiprocessing.Queue):
     asyncio.run(task_manager(queue))
