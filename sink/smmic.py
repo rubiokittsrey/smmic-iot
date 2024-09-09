@@ -15,44 +15,10 @@ from src.hardware import network
 from src.mqtt import service, client
 
 # internal helpers, configs
-from utils import log_config, set_logging_configuration, Modes, status
+from utils import log_config, Modes, status, priority, set_priority
 from settings import Broker
 
 __log__ = log_config(logging.getLogger(__name__))
-
-# runs the system checks from the network and service modules
-# returns a tuple of status literals, core status and api connection status
-def sys_check() -> Tuple[int, int | None]:
-    # the core functions status, excluding the api connection status
-    core_status: int
-    # the api status
-    # NOTE: that if the api status is unsuccessful the system should still operate under limited functionalities
-    # i.e. store data locally (and only until uploaded to api)
-    api_status: int | None = None
-
-    __log__.info(f"Performing core system checks")
-
-    # perform the network check function from the network module
-    # check interface status, ping gateway to verify connectivity
-    net_check = network.network_check()
-    if net_check == status.SUCCESS:
-        __log__.debug(f'Network check successful, checking mosquitto service status')
-        
-        # check mosquitto service status
-        # if mosquitto service check returns status.SUCCESS, proceed with api connection check
-        mqtt_status = service.mqtt_status_check()
-        if mqtt_status == status.ACTIVE:
-            # TODO: implement api connection function
-            # TODO: create no connection to api system protocols
-            core_status = status.SUCCESS
-            api_status = status.SUCCESS
-        else:
-            core_status = status.FAILED
-    else:
-        __log__.critical(f'Network check returned with errors, cannot proceed with operation')
-        core_status = status.FAILED
-
-    return core_status, api_status
 
 # for topic '/dev/test'
 # a simple dummy function for testing concurrent task management
@@ -61,7 +27,7 @@ async def dev_test_task(semaphore: asyncio.Semaphore, msg: dict) -> None:
     duration = random.randint(1, 10)
     async with semaphore:
         await asyncio.sleep(duration)
-        __log__.debug(f"Task done @ PID {os.getpid()} (dev_test_task()): [mid: {msg['mid']}, topic: {msg['topic']}, payload: {msg['payload']}] after {duration} seconds")
+        __log__.debug(f"Task done @ PID {os.getpid()} (dev_test_task()): [timestamp: {msg['timestamp']}, topic: {msg['topic']}, payload: {msg['payload']}] after {duration} seconds")
 
 # retrieves messages from the queue
 def from_queue_msg(queue: multiprocessing.Queue) -> dict | None:
@@ -77,7 +43,7 @@ def from_queue_msg(queue: multiprocessing.Queue) -> dict | None:
 
 # the task manager function
 # this is the function that should handle the messages incoming from the queue
-async def queue_monitor(queue: multiprocessing.Queue) -> None:
+async def task_manager(queue: multiprocessing.Queue) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
     semaphore = asyncio.Semaphore(10)
@@ -100,9 +66,9 @@ async def queue_monitor(queue: multiprocessing.Queue) -> None:
                 # TODO: implement task handling for different types of messages
                 # TODO: maybe have this as a separate function
                 if msg:
-                    __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']}, payload: {msg['payload']})")
+                    __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']}, payload: {msg['payload']}, timestamp: {msg['timestamp']})")
 
-                    # /dev/test topic
+                    #/dev/test topic
                     if msg['topic'] == '/dev/test':
                         asyncio.create_task(dev_test_task(semaphore, msg))
 
@@ -121,7 +87,7 @@ def run_task_manager(msg_queue: multiprocessing.Queue) -> None:
     # if loop event loop is present, run main()
     if loop:
         try:
-            loop.run_until_complete(queue_monitor(msg_queue))
+            loop.run_until_complete(task_manager(msg_queue))
         except asyncio.CancelledError or KeyboardInterrupt:
             __log__.error(f"Closing main() loop @ PID {os.getpid()}: KeyboardInterrupt")
         except Exception as e:
@@ -135,17 +101,22 @@ class Handler:
         self.__msg_queue__: multiprocessing.Queue = __msg_queue__
     
     # the message callback function
-    # generally just routes the messages received by the client on relevant topics to the queue
+    # routes the messages received by the client on relevant topics to the queue
+    # sets the priority for each task
     # NOTE to self: can be scaled to do more tasks just in case
     def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
-        topic = message.topic
-        payload = str(message.payload.decode('utf-8'))
-        msg_id = message.mid
+        _topic = message.topic
+        _timestamp = message.timestamp
+        _payload = str(message.payload.decode('utf-8'))
+        _priority = set_priority(_topic)
+
+        if not _priority:
+            __log__.debug(f"Cannot assert priority of message from topic: {_topic}, setting priority to moderate instead")
 
         try:
-            self.__msg_queue__.put({'topic': topic, 'payload': payload, 'mid': msg_id})
+            self.__msg_queue__.put({'priority': _priority, 'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
-            __log__.warning(f"Failed routing message to queue (Handler.msg_callback()): ('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}")
+            __log__.warning(f"Failed routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
 
         return
 
@@ -196,6 +167,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     except asyncio.CancelledError or KeyboardInterrupt:
         __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
+# create a new event loop and then run the main process within that loop
 def run():
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -214,6 +186,40 @@ def run():
             __log__.error(f"Failed to run main loop: {str(e)}")
         finally:
             loop.close()
+
+# runs the system checks from the network and service modules
+# returns a tuple of status literals, core status and api connection status
+def sys_check() -> Tuple[int, int | None]:
+    # the core functions status, excluding the api connection status
+    core_status: int
+    # the api status
+    # NOTE: that if the api status is unsuccessful the system should still operate under limited functionalities
+    # i.e. store data locally (and only until uploaded to api)
+    api_status: int | None = None
+
+    __log__.info(f"Performing core system checks")
+
+    # perform the network check function from the network module
+    # check interface status, ping gateway to verify connectivity
+    net_check = network.network_check()
+    if net_check == status.SUCCESS:
+        __log__.debug(f'Network check successful, checking mosquitto service status')
+        
+        # check mosquitto service status
+        # if mosquitto service check returns status.SUCCESS, proceed with api connection check
+        mqtt_status = service.mqtt_status_check()
+        if mqtt_status == status.ACTIVE:
+            # TODO: implement api connection function
+            # TODO: create no connection to api system protocols
+            core_status = status.SUCCESS
+            api_status = status.SUCCESS
+        else:
+            core_status = status.FAILED
+    else:
+        __log__.critical(f'Network check returned with errors, cannot proceed with operation')
+        core_status = status.FAILED
+
+    return core_status, api_status
 
 if __name__ == "__main__":
     if os.system('cls') != 0:

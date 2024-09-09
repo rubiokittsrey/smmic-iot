@@ -7,7 +7,7 @@ from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
 
 # internal
-from settings import Broker, APPConfigurations, get_topics
+from settings import Broker, APPConfigurations, get_topics, DevTopics
 from utils import log_config, status
 
 # internal log object
@@ -58,6 +58,8 @@ def __subscribe__(client: paho_mqtt.Client | None) -> None:
     app, sys = get_topics()
     topics = app + sys
 
+    topics.append(DevTopics.TEST)
+
     global __subscriptions__
 
     if not client: return
@@ -92,7 +94,7 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     __CALLBACK_CLIENT__ = _client
 
     # add the message callback handler
-    _client.message_callback_add("/dev/test", _msg_handler)
+    _client.message_callback_add(DevTopics.TEST, _msg_handler)
     _client.message_callback_add("smmic/#", _msg_handler)
 
     return True

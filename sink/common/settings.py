@@ -3,7 +3,7 @@
 import os
 import yaml
 import logging
-from typing import Tuple
+from typing import Tuple, List
 
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 
@@ -22,11 +22,11 @@ __smmic_topics__ = settings_yaml["topics"]
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
 
-def set_logging_level(level):
+def set_logging_level(level: int) -> None:
     global LOGGING_LEVEL
     LOGGING_LEVEL = level
 
-def enable_log_to_file(value):
+def enable_log_to_file(value: bool) -> None:
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
 
@@ -71,25 +71,26 @@ class DevTopics:
     TEST = "/dev/test"
 
 # mqtt functional topics
-class SensorTopics:
-    #BROADCAST = "/broadcast"
-    DATA = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['data']}"
-    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['alert']}"
-
-class SinkTopics:
-    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sink']['alert']}"
-
-class AdminTopics:
-    SETTINGS = f"{__broker_configs__['root_topic']}{__smmic_topics__['admin']['settings']}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
-    # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS
+class Topics:
+    SENSOR : List[str] = __smmic_topics__['sensor']
+    SINK : List[str] = __smmic_topics__['sink']
+    ADMIN : List[str] = __smmic_topics__['admin']
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics
 def get_topics() -> Tuple[list, list]:
-    app_topics = [DevTopics.TEST, SensorTopics.DATA, SensorTopics.ALERT, SinkTopics.ALERT, AdminTopics.SETTINGS]
+    _topics: List[str] = []
+
+    _topic_lists : List[List] = [Topics.ADMIN, Topics.SINK, Topics.SENSOR]
+
+    # go over each topic list, and then over each topic
+    # then insert the root topic before the subtopic
+    for _list in _topic_lists:
+        for topic in _list:
+            _topics.append(f"{Broker.ROOT_TOPIC}{topic}")
     
     # TODO: see what $SYS topics to add for sink node data
     # return this with app_topics when thats done ^
-    sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
+    _sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
 
-    return app_topics, []
+    return _topics, []

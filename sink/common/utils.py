@@ -119,3 +119,58 @@ class Modes:
     def debug(): #type: ignore
         settings.set_logging_level(logging.DEBUG)
         set_logging_configuration()
+
+# the priority class designed for tasks
+class priority:
+    CRITICAL : int = 1 # most urgent tasks, above all else (irrigation alert, system errors etc.)
+    MAJOR : int  = 2 # important tasks (minor errors, network absence etc.)
+    MODERATE : int = 3 # normal routines (api requests, etc.)
+    MINOR : int = 4
+    BLOCKING : int = 5 # tasks that require all other tasks to halt or pause
+    BACKGROUND : int = 0 # store in memory until other more important tasks are done
+
+# TODO: this code could be better
+# sets the task priority based on the topic that it came from
+def set_priority(topic: str) -> int | None:
+    _split = topic.split("/")
+    _priority: int | None = None
+
+    # remove any empty string occurence
+    _empty_str_count = _split.count("")
+    for i in range(_empty_str_count):
+        _split.remove("")
+
+    # dev topics
+    if _split[0] == "dev":
+
+        if _split[1] == "test":
+            _priority = priority.MINOR
+
+    if _split[0] == "smmic":
+
+        # irrigation sub topic
+        if _split[1] == "irrigation":
+            _priority = priority.MAJOR
+
+        # sink node sub topics
+        if _split[1] == "sink":
+            
+            # alerts have major priority
+            if _split[2] == "alert":
+                _priority = priority.MAJOR
+
+            # TODO: other sink sub topics here
+
+        if _split[1] == "sensor":
+            
+            if _split[2] == "alert":
+                _priority = priority.MAJOR
+
+            if _split[2] == "data":
+                _priority = priority.MODERATE
+                
+    #     # sensor subtopics
+    #     if _split[1] == "sensor":
+    #         _priority = priority.
+
+    return _priority
