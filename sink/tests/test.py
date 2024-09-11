@@ -1,119 +1,49 @@
-# third-party
-import asyncio
-import multiprocessing
-import multiprocessing.queues
-import os
-import sys
-import paho.mqtt.client as paho_mqtt
+# third party
+import requests
+import time
 import logging
-from typing import Any
-import random
-from concurrent.futures import ThreadPoolExecutor
+from requests.exceptions import HTTPError, Timeout
+from typing import Dict, Any, Callable
+from decimal import Decimal
 
-# internal
-# NOTE: for wsl development
-sys.path.append('/mnt/d/projects/smmic-iot/sink/common')
-
-import settings
-sys.path.append(settings.APPConfigurations.SRC_PATH)
-
-import mqtt.client as client
-from utils import log_config, Modes, status
+# internal helper modules, configs
+from settings import APIRoutes
+from utils import log_config
 
 __log__ = log_config(logging.getLogger(__name__))
 
-async def worker(payload: str):
-    sleep_time = random.randint(1, 10)
-    await asyncio.sleep(sleep_time)
-    __log__.debug(f"@ PID {os.getpid()} -> test.worker() done with: {payload} after {sleep_time} seconds")
+reading_to_api_url = f"{APIRoutes.BASE_URL}/createSNreadings/"
 
-def get_msg_from_queue(queue: multiprocessing.Queue):
-    msg: dict | None = None
-    try:
-        msg = queue.get(timeout=0.1)
-    except Exception as e:
-        __log__.error(f"@ PID {os.getpid()} -> test.task_manager() cannot get message from queue: {e}") if msg != None else None
+test_data = {
+    'Sensor_Node' : 'fd7b1df2-3822-425c-b4c3-e9859251728d',
+    'soil_moisture' : 75,
+    'humidity' : 68,
+    'temperature' : 24,
+    'battery_level' : 98
+}
 
-    return msg
+# task statistics decorator
+def __stats__(func: Callable):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
 
-async def task_manager(queue: multiprocessing.Queue):
-    loop = asyncio.get_running_loop()
+        __log__.debug(f"Request statistics -> {func.__name__} took {end - start} seconds to execute")
 
-    __log__.debug(f"@ PID {os.getpid()} -> running test.task_manager() child process function")
-    with ThreadPoolExecutor() as pool:
-        while True:
-            msg = await loop.run_in_executor(pool, get_msg_from_queue, queue)
-            
-            if msg:
-                __log__.debug(f"@ PID {os.getpid()} -> test.task_manager() received message from queue (topic: {msg["topic"]}, payload: {msg["payload"]})")
-                asyncio.create_task(worker(msg["payload"]))
-
-            await asyncio.sleep(0.1)
-
-def run_task_manager(queue: multiprocessing.Queue):
-    asyncio.run(task_manager(queue))
-
-class Handler:
-    def __init__(self, msg_queue: multiprocessing.Queue):
-        self.msg_queue: multiprocessing.Queue = msg_queue
-
-    def message_to_queue_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage):
-        topic = message.topic
-        payload = str(message.payload.decode('utf-8'))
-
-        __log__.debug(f"@ PID {os.getpid()} -> test.message_to_queue_callback received message @ topic {topic}: {payload}")
-
-        try:
-            self.msg_queue.put({"topic": topic, "payload": payload})
-        except Exception as e:
-            __log__.error(f"@ PID {os.getpid()} -> test.message_to_queue_callback() error routing message ('topic': {topic}, 'payload': {payload}) to queue: {e}")
-
-        return
+        return result
     
-async def main():
-    __log__.debug(f"@ PID {os.getpid()} -> parent process running test.main()")
-    
-    # the message queue where the two processes will communicate and the process object variable
-    msg_queue = multiprocessing.Queue()
-    task_manager_p = None
+    return wrapper
 
-    try:
-        # first, spawn the task manager process
-        task_manager_p = multiprocessing.Process(target=run_task_manager, args=(msg_queue,))
-        task_manager_p.start()
+@__stats__
+def testReadingToApi(data: Dict[str, Any]):
+    response = requests.post(reading_to_api_url, json=data)
 
-        __log__.debug(f"@ PID {os.getpid()} -> running callback client task loop")
+    if response.status_code == 200:
+        print(f"Response: {response.json()}")
+    else:
+        print(f"failed: {response.json()}")
 
-        # pass the msg_queue to the handler object
-        # then create the callback_client task and pass the callback function from the handler object
-        handler = Handler(msg_queue)
-        callback_client_task = asyncio.create_task(client.start_client(handler.message_to_queue_callback))
-
-        try:
-            await asyncio.gather(callback_client_task)
-        except asyncio.CancelledError or KeyboardInterrupt:
-            __log__.debug(f"@ PID {os.getpid()} -> received KeyboardInterrupt, terminating test.run_task_manager() child process")
-            task_manager_p.terminate()
-            task_manager_p.join()
-            
-            # disconnect and shutdown the callback client properly
-            await asyncio.gather(client.shutdown_client())
-
-            raise
-        
-        # keep this thread alive
-        while True:
-            await asyncio.sleep(0.1)
-
-    except Exception as e:
-        __log__.error(f"@ PID {os.getpid()} -> error spawning test.task_manager() function process: {e}")
-
-    except KeyboardInterrupt:
-        __log__.warning(f"@ PID {os.getpid()} -> received KeyboardInterrupt, terminating test.main() process")
 
 if __name__ == "__main__":
-    try:
-        Modes.dev()
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        __log__.warning(f"@ PID {os.getpid()} -> exiting test.py")
+    testReadingToApi(test_data)

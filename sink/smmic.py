@@ -116,7 +116,7 @@ class Handler:
         try:
             self.__msg_queue__.put({'priority': _priority, 'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
-            __log__.warning(f"Failed routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
+            __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
 
         return
 
