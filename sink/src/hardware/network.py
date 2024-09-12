@@ -63,7 +63,7 @@ def __ping__(host, repeat=1) -> Tuple[str | None, ...]:
 def __time_out_handler__(function):
     # the default timeout duration on disconnected, ideally this should be 5 minutes
     # value is configured in settings.yaml
-    maxTimeouts = settings.APPConfigurations.NETWORK_MAX_TIMEOUTS
+    maxTimeouts = settings.APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES
     timeOut = settings.APPConfigurations.NETWORK_TIMEOUT
 
     __log__.warning(f'Retrying again in {timeOut} seconds. Attemps remaining: {maxTimeouts}')

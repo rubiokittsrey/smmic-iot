@@ -3,22 +3,43 @@
 import os
 import yaml
 import logging
-from typing import Tuple, List
+from dotenv import load_dotenv
+from typing import Tuple, List, Any
 
+# get configurations from settings.yaml
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
-
 with open(spath, 'r') as sfile:
     settings_yaml = yaml.safe_load(sfile)
-
-__app_net_configs__ = settings_yaml["app_configurations"]["network"]
-__test_configs__ = settings_yaml["app_configurations"]["tests"]
-__base_url__ = settings_yaml["api_routes"]["base_url"]
-__api_endpoints__ = settings_yaml["api_routes"]["endpoints"]
-__api_configs__ = settings_yaml["api_configurations"]
-__broker_configs__ = settings_yaml["broker"]
+__app_net_configs__ = settings_yaml["app_configurations"]["network"] # the application network configurations
+__test_configs__ = settings_yaml["app_configurations"]["tests"] # testing configurations
 __dev_configs__ = settings_yaml["dev_configs"]
-__smmic_topics__ = settings_yaml["topics"]
 
+# load the .env variables
+envpath = os.path.join(os.path.dirname(__file__), '../.env')
+load_dotenv(envpath)
+
+# get topic lists from the .env file
+def __topics_from_env__(key: str) -> List[str]:
+    topics_str = os.getenv(key)
+    topics: List[str]
+    
+    if topics_str:
+        topics = []
+        topics += topics_str.split(',')
+        
+    for i in range(topics.count("")):
+        topics.remove("")
+    
+    return topics
+
+# get variables from the .env file
+def __var_from_env__(key: str) -> Any:
+    var = os.getenv(key)
+
+    if var:
+        return var
+    
+# global vars
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
 
@@ -33,6 +54,7 @@ def enable_log_to_file(value: bool) -> None:
 # development configurations
 # class DevConfigs:
 
+
 # application configurations 
 class APPConfigurations:
     MQTT_PW = settings_yaml["app_configurations"]["mqtt_pwd"]
@@ -44,7 +66,7 @@ class APPConfigurations:
     GATEWAY = __app_net_configs__["gateway"]
     NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
     NETWORK_TIMEOUT = __app_net_configs__["timeout"]
-    NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
+    NETWORK_MAX_TIMEOUT_RETRIES = __app_net_configs__["max_connection_timeouts"]
 
     #logging
     LOG_FILE_DIRECTORY = __dev_configs__["log_file_directory"]
@@ -52,19 +74,21 @@ class APPConfigurations:
 
 # api base url, enpoints
 class APIRoutes:
-    BASE_URL = __base_url__
-    TEST_URL = __api_endpoints__["rpi_test"]
+    BASE_URL : str = __var_from_env__("API_URL")
+    TEST_URL : str = __var_from_env__("API_TEST_URL")
+    SINK_DATA : str = __var_from_env__("SINK_DATA")
+    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
     HEADERS = settings_yaml["headers"]
 
 # api configurations
 class APIConfigs:
-    SECRET_KEY = __api_configs__["secret_key"]
+    SECRET_KEY : str = __var_from_env__("SECRET_KEY")
 
 # mqtt broker configuration
 class Broker:
-    HOST = __broker_configs__["host"]
-    PORT = __broker_configs__["port"]
-    ROOT_TOPIC = __broker_configs__["root_topic"]
+    HOST : str = __var_from_env__("BROKER_HOST_ADDRESS")
+    PORT : int = int(__var_from_env__("BROKER_PORT"))
+    ROOT_TOPIC : str = __topics_from_env__("ROOT_TOPIC")[0]
 
 # mqtt dev topics
 class DevTopics:
@@ -72,9 +96,9 @@ class DevTopics:
 
 # mqtt functional topics
 class Topics:
-    SENSOR : List[str] = __smmic_topics__['sensor']
-    SINK : List[str] = __smmic_topics__['sink']
-    ADMIN : List[str] = __smmic_topics__['admin']
+    SENSOR : List[str] = __topics_from_env__("SENSOR")
+    SINK : List[str] = __topics_from_env__("SINK")
+    ADMIN : List[str] = __topics_from_env__("ADMIN")
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics

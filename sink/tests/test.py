@@ -44,6 +44,5 @@ def testReadingToApi(data: Dict[str, Any]):
     else:
         print(f"failed: {response.json()}")
 
-
 if __name__ == "__main__":
     testReadingToApi(test_data)

@@ -105,7 +105,7 @@ def __on_connect_fail__(_client: paho_mqtt.Client, _userdata: Any):
 
     global __CLIENT_STAT__
 
-    attempts = APPConfigurations.NETWORK_MAX_TIMEOUTS
+    attempts = APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES
     timeout = APPConfigurations.NETWORK_TIMEOUT
 
     while True:

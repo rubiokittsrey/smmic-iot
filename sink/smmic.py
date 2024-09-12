@@ -189,6 +189,7 @@ def run():
 
 # runs the system checks from the network and service modules
 # returns a tuple of status literals, core status and api connection status
+# TODO: add an environment variables check in settings.py and call it in this method
 def sys_check() -> Tuple[int, int | None]:
     # the core functions status, excluding the api connection status
     core_status: int
