@@ -127,7 +127,7 @@ class priority:
     MODERATE : int = 3 # normal routines (api requests, etc.)
     MINOR : int = 4
     BLOCKING : int = 5 # tasks that require all other tasks to halt or pause
-    BACKGROUND : int = 0 # store in memory until other more important tasks are done
+    BACKGROUND : int = 6 # store in memory until other more important tasks are done
 
 # TODO: this code could be better
 # sets the task priority based on the topic that it came from

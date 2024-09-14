@@ -3,12 +3,13 @@ import asyncio
 import time
 import logging
 import os
+import multiprocessing
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
 
 # internal
 from settings import Broker, APPConfigurations, get_topics, DevTopics
-from utils import log_config, status
+from utils import log_config, status, priority, set_priority
 
 # internal log object
 __log__ = log_config(logging.getLogger(__name__))
@@ -193,6 +194,32 @@ async def shutdown_client() -> bool:
         return True
     
     return False
+
+# necessary handler class in order to include the usage of the Queue object in the message callback of the client
+class Handler:
+    def __init__(self, __msg_queue__: multiprocessing.Queue) -> None:
+        self.__msg_queue__: multiprocessing.Queue = __msg_queue__
+    
+    # the message callback function
+    # routes the messages received by the client on relevant topics to the queue
+    # sets the priority for each task
+    # NOTE to self: can be scaled to do more tasks just in case
+    def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
+        _topic = message.topic
+        _timestamp = message.timestamp
+        _payload = str(message.payload.decode('utf-8'))
+        _priority = set_priority(_topic)
+
+        if not _priority:
+            __log__.debug(f"Cannot assert priority of message from topic: {_topic}, setting priority to moderate instead")
+            _priority = priority.MODERATE
+
+        try:
+            self.__msg_queue__.put({'priority': _priority, 'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+        except Exception as e:
+            __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
+
+        return
 
 if __name__ == "__main__":
     def dummy_handler(cli, usdata, msg):
