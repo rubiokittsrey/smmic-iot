@@ -1,3 +1,8 @@
+# README 
+# this is the api requests module that should be used to make calls to the api
+# TODO: implement support for django websockets
+# TODO: refactor to use aiohttp
+
 # third-party
 import requests
 import time
@@ -5,6 +10,7 @@ import logging
 from requests.exceptions import HTTPError, Timeout
 from typing import Dict, Any, Callable
 from decimal import Decimal
+from aiohttp import aiohttp, http_exceptions
 
 # internal helpers, configs
 from settings import APIRoutes, APPConfigurations
@@ -49,7 +55,7 @@ def __req__(func: Callable):
         end = time.time()
         __log__.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed)")
         return None
-    
+
     return _wrapper
 
 # TODO: add the unit test at api_test.py

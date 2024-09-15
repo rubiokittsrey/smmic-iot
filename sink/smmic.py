@@ -1,3 +1,10 @@
+# README
+# this module manager everything in this entire operation
+# 1. responsible for spawning the task manager child process
+# 2. runs the client in an event loop
+# 3. routes messages to the msg_queue
+# 4. TODO: implement spawning of hardware process to manage hardware tasks in true parallelism
+
 # third-party
 import logging
 import argparse
@@ -13,7 +20,6 @@ from typing import Tuple
 # internal core modules
 from src.hardware import network
 from src.mqtt import service, client
-from src.data import taskmanager
 import taskmanager
 
 # internal helpers, configs
@@ -24,7 +30,7 @@ __log__ = log_config(logging.getLogger(__name__))
 
 # runs the task_manager asyncio event loop
 # this loop is important to allow concurrent task execution
-def run_task_manager(msg_queue: multiprocessing.Queue) -> None:
+def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.new_event_loop()
@@ -32,18 +38,45 @@ def run_task_manager(msg_queue: multiprocessing.Queue) -> None:
         __log__.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
 
-    # if loop event loop is present, run main()
+    # if loop event loop is present, start taskmanager
     if loop:
         try:
             # the task manager module
             # handles the messages incoming from the queue
-            loop.run_until_complete(taskmanager.start(msg_queue))
+            loop.run_until_complete(taskmanager.run(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue))
         except asyncio.CancelledError or KeyboardInterrupt:
             raise
         except Exception as e:
             __log__.error(f"Failed to run main loop: {str(e)}")
         finally:
             loop.close()
+
+def run_aio_client(queue: multiprocessing.Queue) -> None:
+    loop: asyncio.AbstractEventLoop | None = None
+
+    # its very imporatnt the a new event loop is instantiated
+    # if this somehow fails, exit this current process
+    try:
+        loop = asyncio.new_event_loop()
+    except Exception as e:
+        __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
+        os._exit(0)
+
+    # TODO: implement
+    # if loop:
+    #     try:
+    #         loop.run_until_complete()
+
+def run_hardware_p(queue: multiprocessing.Queue) -> None:
+    loop: asyncio.AbstractEventLoop | None = None
+
+    try:
+        loop = asyncio.new_event_loop()
+    except Exception as e:
+        __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
+        os._exit(0)
+
+    #TODO: implement
 
 # the main function of this operation
 # and the parent process of the task manager process
@@ -52,11 +85,20 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     msg_queue = multiprocessing.Queue()
+    aio_queue = multiprocessing.Queue()
+    hardware_queue = multiprocessing.Queue()
+
+    tsk_mngr_kwargs = {
+        'msg_queue': msg_queue,
+        'aio_queue': aio_queue,
+        'hardware_queue': hardware_queue
+    }
+
     task_manager_p: multiprocessing.Process | None = None
 
     try:
         # first, spawn and run the task manager process
-        task_manager_p = multiprocessing.Process(target=run_task_manager, args=(msg_queue,))
+        task_manager_p = multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs)
         task_manager_p.start()
 
         # pass the msg_queue to the handler object

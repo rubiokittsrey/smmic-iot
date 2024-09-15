@@ -65,8 +65,8 @@ class APPConfigurations:
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
     NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
-    NETWORK_TIMEOUT = __app_net_configs__["timeout"]
-    NETWORK_MAX_TIMEOUT_RETRIES = __app_net_configs__["max_connection_timeouts"]
+    NETWORK_TIMEOUT : int = __app_net_configs__["timeout"]
+    NETWORK_MAX_TIMEOUT_RETRIES : int = __app_net_configs__["max_connection_timeouts"]
 
     #logging
     LOG_FILE_DIRECTORY = __dev_configs__["log_file_directory"]

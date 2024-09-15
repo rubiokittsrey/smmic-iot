@@ -6,7 +6,9 @@ import sys
 import logging
 import time
 import os
-from typing import List
+import aiohttp
+import asyncio
+from typing import List, Any
 from datetime import datetime
 
 # internal
@@ -18,10 +20,16 @@ except Exception as e:
 
 import settings
 sys.path.append(settings.APPConfigurations.SRC_PATH)
-import data.api as api
+import requests as requests
 from utils import Modes, log_config, status
 
 __log__ = log_config(logging.getLogger(__name__))
+
+async def api_test_req(url: str, data: dict) -> Any:
+    session = aiohttp.ClientSession()
+    res = await getattr(requests, api_req_funcs[i][0])(session=session, url = url, data = data)
+    await session.close()
+    return res
 
 if __name__ == "__main__":
     Modes.dev()
@@ -29,10 +37,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SMMIC data module unit tests")
     subparser = parser.add_subparsers(dest="submodule")
 
-    # api module parsers
-    parser_api = subparser.add_parser("api", help="Test the api submodule")
+    # requests submodule parsers
+    parser_api = subparser.add_parser("requests", help="Test the api_requests submodule")
 
-    # api subparser parsers
+    # requests subparser parsers
     api_subparser = parser_api.add_subparsers(dest="function")
     api_req_funcs : List[List[str]]  = [
         ["get_req", "Send a get request to the api"],
@@ -51,7 +59,9 @@ if __name__ == "__main__":
         parser.print_help()
         parser_api.print_help()
 
-    elif args.submodule == "api":
+    elif args.submodule == "requests":
+        # TODO: implement try - exception
+        loop = asyncio.new_event_loop()
         data = {
             'Sensor_Node' : 'fd7b1df2-3822-425c-b4c3-e9859251728d',
             'soil_moisture' : 100,
@@ -61,6 +71,7 @@ if __name__ == "__main__":
             'timestamp' : str(datetime.now())
         }
         url = f"{settings.APIRoutes.BASE_URL}{settings.APIRoutes.SENSOR_DATA}"
+
         for i in range(len(api_req_funcs)):
             if args.function == api_req_funcs[i][0]:
-                res = getattr(api, api_req_funcs[i][0])(url = url, data = data)
+                loop.run_until_complete(api_test_req(url, data))
