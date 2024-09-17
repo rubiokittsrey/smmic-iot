@@ -26,9 +26,14 @@ from utils import Modes, log_config, status
 __log__ = log_config(logging.getLogger(__name__))
 
 async def api_test_req(url: str, data: dict) -> Any:
-    session = aiohttp.ClientSession()
-    res = await getattr(requests, api_req_funcs[i][0])(session=session, url = url, data = data)
-    await session.close()
+    res: Any = None
+    try:
+        session = aiohttp.ClientSession()
+        res = await getattr(requests, api_req_funcs[i][0])(session=session, url = url, data = data, retries=2)
+    except Exception as e:
+        __log__.error(f"Error raised: {str(e)}")
+    finally:
+        await session.close()
     return res
 
 if __name__ == "__main__":
@@ -73,5 +78,6 @@ if __name__ == "__main__":
         url = f"{settings.APIRoutes.BASE_URL}{settings.APIRoutes.SENSOR_DATA}"
 
         for i in range(len(api_req_funcs)):
+
             if args.function == api_req_funcs[i][0]:
                 loop.run_until_complete(api_test_req(url, data))

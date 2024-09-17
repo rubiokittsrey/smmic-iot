@@ -82,3 +82,42 @@ async def post_req(
         response.raise_for_status()
         __log__.debug(f"Post request successful: {response.status} -> {await response.json()}")
         return response
+    
+@__req__
+async def put_req(
+    session: aiohttp.ClientSession,
+    url: str,
+    data: Dict[str, Any],
+    retries: int | None = None,
+    timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Any:
+
+    async with session.put(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+        response.raise_for_status()
+        __log__.debug(f"Put request successful: {response.status} -> {await response.json()}")
+        return response
+
+@__req__
+async def patch_req(
+        session: aiohttp.ClientSession,
+        url: str,
+        data: Dict[str, Any],
+        retries: int | None = None,
+        timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Any:
+    
+    async with session.patch(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+        response.raise_for_status()
+        __log__.debug(f"Patch request successful: {response.status} -> {await response.json()}")
+        return response
+
+@__req__
+async def delete_req(
+        session: aiohttp.ClientSession,
+        url: str,
+        data: Dict[str, Any],
+        retries: int | None = None,
+        timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Any:
+    
+    async with session.delete(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+        response.raise_for_status()
+        __log__.debug(f"Delete request successful: {response.status} -> {await response.json()}")
+        return response
