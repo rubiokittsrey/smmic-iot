@@ -20,6 +20,7 @@ from typing import Tuple
 # internal core modules
 from src.hardware import network
 from src.mqtt import service, client
+from src.data import aioclient
 import taskmanager
 
 # internal helpers, configs
@@ -47,14 +48,14 @@ def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessin
         except asyncio.CancelledError or KeyboardInterrupt:
             raise
         except Exception as e:
-            __log__.error(f"Failed to run main loop: {str(e)}")
+            __log__.error(f"Failed to run task manager loop: {str(e)}")
         finally:
             loop.close()
 
 def run_aio_client(queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
 
-    # its very imporatnt the a new event loop is instantiated
+    # its very important the a new event loop is instantiated
     # if this somehow fails, exit this current process
     try:
         loop = asyncio.new_event_loop()
@@ -63,9 +64,15 @@ def run_aio_client(queue: multiprocessing.Queue) -> None:
         os._exit(0)
 
     # TODO: implement
-    # if loop:
-    #     try:
-    #         loop.run_until_complete()
+    if loop:
+        try:
+            loop.run_until_complete(aioclient.start(queue))
+        except asyncio.CancelledError or KeyboardInterrupt:
+            raise
+        except Exception as e:
+            __log__.error(f"Failed to run aioClient loop: {str(e)}")
+        finally:
+            loop.close()
 
 def run_hardware_p(queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
@@ -99,7 +106,10 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     try:
         # first, spawn and run the task manager process
         task_manager_p = multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs)
+        aio_client_p = multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue})
+
         task_manager_p.start()
+        aio_client_p.start()
 
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
@@ -116,6 +126,10 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
             # terminate the task_manager process
             task_manager_p.terminate()
+            aio_client_p.terminate()
+            
+            # make sure the processes are joined
+            aio_client_p.join()
             task_manager_p.join()
 
             # disconnect and shutdown the callback client loop

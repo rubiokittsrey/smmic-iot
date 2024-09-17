@@ -205,6 +205,13 @@ class Handler:
     # sets the priority for each task
     # NOTE to self: can be scaled to do more tasks just in case
     def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
+        
+        # -->
+        # {priority: the priority of the message
+        # topic: topic message was published ,
+        # payload: the message contents,
+        # timestamp: the message timestamp #NOTE: either when it was sent or received (idk yet)}
+        # --->
         _topic = message.topic
         _timestamp = message.timestamp
         _payload = str(message.payload.decode('utf-8'))

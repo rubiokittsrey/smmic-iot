@@ -2,7 +2,7 @@ import logging as __logging__
 import settings
 import os
 import re
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, List
 import logging
 
 # do not use
@@ -174,3 +174,24 @@ def set_priority(topic: str) -> int | None:
     #         _priority = priority.
 
     return _priority
+
+# TODO: refactor to allow support for other types of sensors
+def map_to_sensor_data(payload: str) -> Dict:
+    final: Dict = {}
+    split = payload.split(";")
+    data: List = []
+
+    if split[0] == 'sensor_type':
+        data = split[3].split(":")
+
+        final.update([
+            ('sensor_type',split[0]),
+            ('Sensor_Node', split[1]),
+            ('timestamp', split[2]),
+            ('soil_moisture', data[0]),
+            ('humidity', data[1]),
+            ('temperature', data[2]),
+            ('battery_level', data[3]),
+        ])
+
+    return final

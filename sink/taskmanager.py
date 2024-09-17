@@ -40,6 +40,7 @@ async def __dev_test_task__(msg: dict) -> None:
 # * hardware_queue: the message queue to send items to the hardware process
 async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
     async with semaphore:
+        
         if msg['topic'] == '/dev/test':
             await __dev_test_task__(msg)
 

@@ -18,10 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Dict, Any
 
 # internal core modules
+import src.data.requests as requests
 
 # internal helpers, configurations
 from utils import log_config
-from settings import APPConfigurations
+from settings import APPConfigurations, Topics, APIRoutes
 
 __log__ = log_config(logging.getLogger(__name__))
 
@@ -42,13 +43,22 @@ def __from_queue__(queue:multiprocessing.Queue) -> dict | None:
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
 async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: aiohttp.ClientSession) -> Any:
+    # NOTE:
+    # ----- msg keys -> {priorty, topic, payload, timestamp}
+
     if not client_session:
         __log__.error(f"Error at aioclient.__router__(), client_session is empty!")
         return
 
     async with semaphore:
         if msg['topic'] == '/dev/test':
-            foo = 'foo' # TODO: implement handling of tasks
+            foo = 'foo'
+
+        if msg['topic'] == Topics.SENSOR_DATA:
+            requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=msg)
+
+        if msg['topic'] == Topics.SENSOR_ALERT:
+            foo = 'foo' #TODO: implement sensor alert handling
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:

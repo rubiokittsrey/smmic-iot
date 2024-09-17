@@ -18,20 +18,6 @@ __dev_configs__ = settings_yaml["dev_configs"]
 envpath = os.path.join(os.path.dirname(__file__), '../.env')
 load_dotenv(envpath)
 
-# get topic lists from the .env file
-def __topics_from_env__(key: str) -> List[str]:
-    topics_str = os.getenv(key)
-    topics: List[str]
-    
-    if topics_str:
-        topics = []
-        topics += topics_str.split(',')
-        
-    for i in range(topics.count("")):
-        topics.remove("")
-    
-    return topics
-
 # get variables from the .env file
 def __var_from_env__(key: str) -> Any:
     var = os.getenv(key)
@@ -88,7 +74,7 @@ class APIConfigs:
 class Broker:
     HOST : str = __var_from_env__("BROKER_HOST_ADDRESS")
     PORT : int = int(__var_from_env__("BROKER_PORT"))
-    ROOT_TOPIC : str = __topics_from_env__("ROOT_TOPIC")[0]
+    ROOT_TOPIC : str = __var_from_env__("ROOT_TOPIC")
 
 # mqtt dev topics
 class DevTopics:
@@ -96,22 +82,31 @@ class DevTopics:
 
 # mqtt functional topics
 class Topics:
-    SENSOR : List[str] = __topics_from_env__("SENSOR")
-    SINK : List[str] = __topics_from_env__("SINK")
-    ADMIN : List[str] = __topics_from_env__("ADMIN")
+    ADMIN_SETTINGS : str = __var_from_env__("ADMIN_SETTINGS_TOPIC")
+    ADMIN_COMMANDS : str = __var_from_env__("ADMIN_COMMANDS_TOPIC")
+    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA_TOPIC")
+    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT_TOPIC")
+    SINK_DATA : str = __var_from_env__("SINK_DATA_TOPIC")
+    SINK_ALERT : str = __var_from_env__("SINK_ALERT_TOPIC")
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics
 def get_topics() -> Tuple[list, list]:
     _topics: List[str] = []
 
-    _topic_lists : List[List] = [Topics.ADMIN, Topics.SINK, Topics.SENSOR]
+    _topic_lists : List[str] = [
+        Topics.ADMIN_SETTINGS,
+        Topics.ADMIN_COMMANDS,
+        Topics.SENSOR_DATA,
+        Topics.SENSOR_ALERT,
+        Topics.SINK_DATA,
+        Topics.SINK_ALERT
+        ]
 
     # go over each topic list, and then over each topic
     # then insert the root topic before the subtopic
-    for _list in _topic_lists:
-        for topic in _list:
-            _topics.append(f"{Broker.ROOT_TOPIC}{topic}")
+    for _topic in _topic_lists:
+        _topics.append(f"{Broker.ROOT_TOPIC}{_topic}")
     
     # TODO: see what $SYS topics to add for sink node data
     # return this with app_topics when thats done ^
