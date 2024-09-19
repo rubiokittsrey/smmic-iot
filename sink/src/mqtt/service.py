@@ -6,9 +6,9 @@ from typing import Literal
 from utils import status, log_config
 import settings
 
-log = log_config(logging.getLogger(__name__))
+__log__ = log_config(logging.getLogger(__name__))
 
-def mqtt_status_check() -> status:
+def mqtt_status_check() -> int:
     try:
         result = subprocess.run(
                 ['systemctl', 'status', 'mosquitto'],
@@ -16,17 +16,19 @@ def mqtt_status_check() -> status:
                 stderr=subprocess.PIPE, text=True
             )
         if "Active: active (running)" in result.stdout:
-            log.info(f'MOSQUITTO Broker status: active')
+            __log__.debug(f'MOSQUITTO Broker status: active')
             # TODO: implement checking which port mosquitto.service is listening to
-            log.warning(f'Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port {settings.Broker.PORT}')
+            __log__.warning(f'Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port {settings.Broker.PORT}')
             return status.ACTIVE
         elif "Active: inactive (dead)" in result.stdout:
-            log.error(f'mosquitto.service status: dead! Please start the mosquitto.service and then rerun status check')
+            __log__.error(f'mosquitto.service status: dead! Please start the mosquitto.service and then rerun status check')
             return status.INACTIVE
         elif "Unit mosquitto.service could not be found" in result.stderr:
-            log.error(f'mosquitto.service could not be found on this environment, cannot verify status')
+            __log__.error(f'mosquitto.service could not be found on this environment, cannot verify status')
             return status.FAILED
     except Exception as e:
         #TODO: handle exception properly!
-        log.info(f'An unhandled exception has occured: {e}')
+        __log__.info(f'An unhandled exception has occured: {e}')
         return status.FAILED
+    
+    return status.FAILED

@@ -3,35 +3,43 @@
 import os
 import yaml
 import logging
-from typing import Tuple
+from dotenv import load_dotenv
+from typing import Tuple, List, Any
 
+# get configurations from settings.yaml
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
-
 with open(spath, 'r') as sfile:
     settings_yaml = yaml.safe_load(sfile)
-
-__app_net_configs__ = settings_yaml["app_configurations"]["network"]
-__test_configs__ = settings_yaml["app_configurations"]["tests"]
-__base_url__ = settings_yaml["api_routes"]["base_url"]
-__api_endpoints__ = settings_yaml["api_routes"]["endpoints"]
-__api_configs__ = settings_yaml["api_configurations"]
-__broker_configs__ = settings_yaml["broker"]
+__app_net_configs__ = settings_yaml["app_configurations"]["network"] # the application network configurations
+__test_configs__ = settings_yaml["app_configurations"]["tests"] # testing configurations
 __dev_configs__ = settings_yaml["dev_configs"]
-__smmic_topics__ = settings_yaml["topics"]
 
+# load the .env variables
+envpath = os.path.join(os.path.dirname(__file__), '../.env')
+load_dotenv(envpath)
+
+# get variables from the .env file
+def __var_from_env__(key: str) -> Any:
+    var = os.getenv(key)
+
+    if var:
+        return var
+    
+# global vars
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
 
-def set_logging_level(level):
+def set_logging_level(level: int) -> None:
     global LOGGING_LEVEL
     LOGGING_LEVEL = level
 
-def enable_log_to_file(value):
+def enable_log_to_file(value: bool) -> None:
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
 
 # development configurations
 # class DevConfigs:
+
 
 # application configurations 
 class APPConfigurations:
@@ -43,8 +51,8 @@ class APPConfigurations:
     SRC_PATH = __test_configs__["src_path"]
     GATEWAY = __app_net_configs__["gateway"]
     NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
-    NETWORK_TIMEOUT = __app_net_configs__["timeout"]
-    NETWORK_MAX_TIMEOUTS = __app_net_configs__["max_connection_timeouts"]
+    NETWORK_TIMEOUT : int = __app_net_configs__["timeout"]
+    NETWORK_MAX_TIMEOUT_RETRIES : int = __app_net_configs__["max_connection_timeouts"]
 
     #logging
     LOG_FILE_DIRECTORY = __dev_configs__["log_file_directory"]
@@ -52,44 +60,56 @@ class APPConfigurations:
 
 # api base url, enpoints
 class APIRoutes:
-    BASE_URL = __base_url__
-    TEST_URL = __api_endpoints__["rpi_test"]
+    BASE_URL : str = __var_from_env__("API_URL")
+    TEST_URL : str = __var_from_env__("API_TEST_URL")
+    SINK_DATA : str = __var_from_env__("SINK_DATA")
+    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
     HEADERS = settings_yaml["headers"]
 
 # api configurations
 class APIConfigs:
-    SECRET_KEY = __api_configs__["secret_key"]
+    SECRET_KEY : str = __var_from_env__("SECRET_KEY")
 
 # mqtt broker configuration
 class Broker:
-    HOST = __broker_configs__["host"]
-    PORT = __broker_configs__["port"]
-    ROOT_TOPIC = __broker_configs__["root_topic"]
+    HOST : str = __var_from_env__("BROKER_HOST_ADDRESS")
+    PORT : int = int(__var_from_env__("BROKER_PORT"))
+    ROOT_TOPIC : str = __var_from_env__("ROOT_TOPIC")
 
 # mqtt dev topics
 class DevTopics:
     TEST = "/dev/test"
 
 # mqtt functional topics
-class SensorTopics:
-    #BROADCAST = "/broadcast"
-    DATA = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['data']}"
-    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sensor']['alert']}"
-
-class SinkTopics:
-    ALERT = f"{__broker_configs__['root_topic']}{__smmic_topics__['sink']['alert']}"
-
-class AdminTopics:
-    SETTINGS = f"{__broker_configs__['root_topic']}{__smmic_topics__['admin']['settings']}" # smmic/admin/settings/[SINK or SENSOR]/[DEVICE ID]
-    # COMMANDS = f"{__broker_configs__["root_topic"]}{__smmic_topics__["admin"]["commands"]}" #TODO: IMPLEMENT COMMANDS
+class Topics:
+    ADMIN_SETTINGS : str = __var_from_env__("ADMIN_SETTINGS_TOPIC")
+    ADMIN_COMMANDS : str = __var_from_env__("ADMIN_COMMANDS_TOPIC")
+    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA_TOPIC")
+    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT_TOPIC")
+    SINK_DATA : str = __var_from_env__("SINK_DATA_TOPIC")
+    SINK_ALERT : str = __var_from_env__("SINK_ALERT_TOPIC")
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics
 def get_topics() -> Tuple[list, list]:
-    app_topics = [DevTopics.TEST, SensorTopics.DATA, SensorTopics.ALERT, SinkTopics.ALERT, AdminTopics.SETTINGS]
+    _topics: List[str] = []
+
+    _topic_lists : List[str] = [
+        Topics.ADMIN_SETTINGS,
+        Topics.ADMIN_COMMANDS,
+        Topics.SENSOR_DATA,
+        Topics.SENSOR_ALERT,
+        Topics.SINK_DATA,
+        Topics.SINK_ALERT
+        ]
+
+    # go over each topic list, and then over each topic
+    # then insert the root topic before the subtopic
+    for _topic in _topic_lists:
+        _topics.append(f"{Broker.ROOT_TOPIC}{_topic}")
     
     # TODO: see what $SYS topics to add for sink node data
     # return this with app_topics when thats done ^
-    sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
+    _sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
 
-    return app_topics, []
+    return _topics, []

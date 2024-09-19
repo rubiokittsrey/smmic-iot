@@ -3,12 +3,13 @@ import asyncio
 import time
 import logging
 import os
+import multiprocessing
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
-from typing import Any
+from typing import Any, List
 
 # internal
-from settings import Broker, APPConfigurations, get_topics
-from utils import log_config, status
+from settings import Broker, APPConfigurations, get_topics, DevTopics
+from utils import log_config, status, priority, set_priority
 
 # internal log object
 __log__ = log_config(logging.getLogger(__name__))
@@ -19,8 +20,8 @@ __log__ = log_config(logging.getLogger(__name__))
 __subscriptions__ = []
 
 # global vars
-__CLIENT_STAT__ = status.DISCONNECTED
-__CALLBACK_CLIENT__: paho_mqtt.Client | None
+__CLIENT_STAT__: int = status.DISCONNECTED
+__CALLBACK_CLIENT__: paho_mqtt.Client | None = None
 
 # interal private function called upon to instantiate the smmic client object
 def __init_client__() -> paho_mqtt.Client | None:
@@ -36,31 +37,33 @@ def __init_client__() -> paho_mqtt.Client | None:
 
 # internal callback functions
 def __on_connected__(client:paho_mqtt.Client, userData, flags, rc, properties) -> None:
-    __log__.info(f"Callback client connected to broker at {Broker.HOST}:{Broker.PORT}")
+    __log__.debug(f"Callback client connected to broker @ {Broker.HOST}:{Broker.PORT}")
 
 def __on_disconnected__(client: paho_mqtt.Client,
                         userData: Any,
                         disconnect_flags: paho_mqtt.DisconnectFlags,
                         rc: reasoncodes.ReasonCode,
                         properties: properties.Properties) -> None:
-    __log__.warning(f"Callback client has been disconnected from broker: {rc} (disregard if expected)")
+    __log__.warning(f"Callback client has been disconnected from broker: {rc}")
 
 def __on_publish__(client: paho_mqtt.Client, userData: Any, mid: int, rc: reasoncodes.ReasonCode, prop: properties.Properties):
     # TODO: implement on publish, not sure what to do
     return
 
 def __on_subscribe__(client: paho_mqtt.Client, userdata, mid, reason_code_list, properties):
-    #TODO: fix this shit code
     __log__.debug(f"Callback client subscribed to topic: {__subscriptions__[0]}")
     __subscriptions__.pop(0)
+    # NOTE: ^ temporary lazy workaround
+    # TODO: fix this shit code
 
-def __subscribe__(client: paho_mqtt.Client | None) -> None:
+def __subscribe__(client: paho_mqtt.Client) -> None:
     app, sys = get_topics()
     topics = app + sys
 
+    topics.append(DevTopics.TEST)
+
     global __subscriptions__
 
-    if not client: return
     for topic in topics:
         try:
             client.subscribe(topic=topic, qos=2)
@@ -79,11 +82,12 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     global __CALLBACK_CLIENT__
 
     try:
-        __log__.debug(f"Callback client connecting to broker @ {Broker.HOST}:{Broker.PORT}")
         _client.connect(Broker.HOST, Broker.PORT)
         _client.loop_start()
     except Exception as e:
         __log__.error(f"Unable to establish successful connection with broker: {e}")
+        return False
+    
     __subscribe__(_client)
     
     __CLIENT_STAT__ = status.CONNECTED
@@ -92,17 +96,18 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     __CALLBACK_CLIENT__ = _client
 
     # add the message callback handler
-    _client.message_callback_add("#", _msg_handler)
+    _client.message_callback_add(DevTopics.TEST, _msg_handler)
+    _client.message_callback_add("smmic/#", _msg_handler)
 
     return True
 
 # handles failed connect attempt at startup
 def __on_connect_fail__(_client: paho_mqtt.Client, _userdata: Any):
-    time.sleep(APPConfigurations.NETWORK_TIMEOUT)
+    __log__.error(f"Attempting reconnect with broker")
 
     global __CLIENT_STAT__
 
-    attempts = APPConfigurations.NETWORK_MAX_TIMEOUTS
+    attempts = APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES
     timeout = APPConfigurations.NETWORK_TIMEOUT
 
     while True:
@@ -141,10 +146,13 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
     _client.on_connect = __on_connected__
     _client.on_publish = __on_publish__
     _client.on_subscribe = __on_subscribe__
-    _client.on_connect_fail = __on_connect_fail__
+    #_client.on_connect_fail = __on_connect_fail__ #TODO fix on connect not executing (?)
 
     con = await __connect_loop__(_client, _msg_handler)
+    if con:
+        __log__.info(f"Paho.MQTT CallbackClient running and connected @ PID: {os.getpid()}")
 
+    # keep this client thread alive
     while True:
         await asyncio.sleep(0.5)
 
@@ -187,6 +195,39 @@ async def shutdown_client() -> bool:
         return True
     
     return False
+
+# necessary handler class in order to include the usage of the Queue object in the message callback of the client
+class Handler:
+    def __init__(self, __msg_queue__: multiprocessing.Queue) -> None:
+        self.__msg_queue__: multiprocessing.Queue = __msg_queue__
+    
+    # the message callback function
+    # routes the messages received by the client on relevant topics to the queue
+    # sets the priority for each task
+    # NOTE to self: can be scaled to do more tasks just in case
+    def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
+        
+        # -->
+        # {priority: the priority of the message
+        # topic: topic message was published ,
+        # payload: the message contents,
+        # timestamp: the message timestamp #NOTE: either when it was sent or received (idk yet)}
+        # --->
+        _topic = message.topic
+        _timestamp = message.timestamp
+        _payload = str(message.payload.decode('utf-8'))
+        _priority = set_priority(_topic)
+
+        if not _priority:
+            __log__.debug(f"Cannot assert priority of message from topic: {_topic}, setting priority to moderate instead")
+            _priority = priority.MODERATE
+
+        try:
+            self.__msg_queue__.put({'priority': _priority, 'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+        except Exception as e:
+            __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
+
+        return
 
 if __name__ == "__main__":
     def dummy_handler(cli, usdata, msg):

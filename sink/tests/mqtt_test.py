@@ -108,5 +108,5 @@ if __name__ == "__main__":
             asyncio.run(start_c_client_test())
 
         # test the subscribe function of the mqtt app
-        if args.function == "subscribe":
-            client.__subscribe__(client=None)
+        # if args.function == "subscribe":
+        #     client.__subscribe__(client=None)

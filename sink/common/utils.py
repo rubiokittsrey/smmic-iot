@@ -2,7 +2,7 @@ import logging as __logging__
 import settings
 import os
 import re
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, List
 import logging
 
 # do not use
@@ -31,7 +31,7 @@ class status:
     CONNECTED = ACTIVE
     DISCONNECTED = INACTIVE
 
-# LOGGING UTILITIES ------------------------------------------------------------------------------------
+# the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
 def log_config(logger) -> __logging__.Logger:
     global __LOGGER_LIST__
@@ -119,3 +119,124 @@ class Modes:
     def debug(): #type: ignore
         settings.set_logging_level(logging.DEBUG)
         set_logging_configuration()
+
+# the priority class designed for tasks
+class priority:
+    CRITICAL : int = 1 # most urgent tasks, above all else (irrigation alert, system errors etc.)
+    MAJOR : int  = 2 # important tasks (minor errors, network absence etc.)
+    MODERATE : int = 3 # normal routines (api requests, etc.)
+    MINOR : int = 4
+    BLOCKING : int = 5 # tasks that require all other tasks to halt or pause
+    BACKGROUND : int = 6 # store in memory until other more important tasks are done
+
+# TODO: this code could be better
+# sets the task priority based on the topic that it came from
+def set_priority(topic: str) -> int | None:
+    _split = topic.split("/")
+    _priority: int | None = None
+
+    # remove any empty string occurence
+    _empty_str_count = _split.count("")
+    for i in range(_empty_str_count):
+        _split.remove("")
+
+    # dev topics
+    if _split[0] == "dev":
+
+        if _split[1] == "test":
+            _priority = priority.MINOR
+
+    if _split[0] == "smmic":
+
+        # irrigation sub topic
+        if _split[1] == "irrigation":
+            _priority = priority.MAJOR
+
+        # sink node sub topics
+        if _split[1] == "sink":
+            
+            # alerts have major priority
+            if _split[2] == "alert":
+                _priority = priority.MAJOR
+
+            # TODO: other sink sub topics here
+
+        if _split[1] == "sensor":
+            
+            if _split[2] == "alert":
+                _priority = priority.MAJOR
+
+            if _split[2] == "data":
+                _priority = priority.MODERATE
+
+    return _priority
+
+# checks if a number is a float or an int
+# returns None if neither
+def is_num(var) -> type[float | int] | None:
+    _type: type[float | int] | None = None
+
+    try:
+        int_var = int(var)
+        _type = int
+    except ValueError:
+        pass
+
+    if _type is None:
+        try:
+            float_var = float(var)
+            _type = float
+        except ValueError:
+            pass
+
+    return _type
+
+# maps the payload from the device reading into a dictionary
+# assuming that the shape of the payload (as a string) is:
+# -------
+# sensor_type;
+# device_id;
+# timestamp;
+# reading:value&
+# reading:value&
+# reading:value&
+# reading:value&
+# ...
+# -------
+def map_sensor_payload(payload: str) -> Dict:
+    final: Dict = {}
+
+    # parse the contents of the payload string
+    outer_split : List[str] = payload.split(";")
+    final.update({
+        'SensorType': outer_split[0],
+        'Sensor_Node': outer_split[1],
+        'timestamp': outer_split[2],
+    })
+
+    # parse the data from the 3rd index of the payload split
+    data : List[str] = outer_split[3].split("&")
+    for value in data:
+        # split the key and value of the value string
+        x = value.split(":")
+        # check the value for a valid num type (int or float)
+        _num_check = is_num(x[1])
+
+        if not _num_check:
+            final.update({x[0]: x[1]})
+        else:
+            final.update({x[0]: _num_check(x[1])})
+
+    # if outer_split[0] == 'sensor_type':
+    #     data : List = outer_split[3].split(":")
+    #     final.update([
+    #         ('sensor_type',outer_split[0]),
+    #         ('Sensor_Node', outer_split[1]),
+    #         ('timestamp', outer_split[2]),
+    #         ('soil_moisture', data[0]),
+    #         ('humidity', data[1]),
+    #         ('temperature', data[2]),
+    #         ('battery_level', data[3]),
+    #     ])
+
+    return final
