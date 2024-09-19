@@ -29,7 +29,7 @@ async def api_test_req(url: str, data: dict) -> Any:
     res: Any = None
     try:
         session = aiohttp.ClientSession()
-        res = await getattr(requests, api_req_funcs[i][0])(session=session, url = url, data = data, retries=2)
+        res = await getattr(requests, api_req_funcs[i][0])(session=session, url = url, data = data)
     except Exception as e:
         __log__.error(f"Error raised: {str(e)}")
     finally:
@@ -68,7 +68,7 @@ if __name__ == "__main__":
         # TODO: implement try - exception
         loop = asyncio.new_event_loop()
         data = {
-            'sensor_type' : 'soil_moisture',
+            'SensorType' : 'soil_moisture',
             'Sensor_Node' : 'fd7b1df2-3822-425c-b4c3-e9859251728d', # id
             'soil_moisture' : 100,
             'humidity' : 100,

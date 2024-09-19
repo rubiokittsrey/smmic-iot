@@ -234,6 +234,7 @@ if __name__ == "__main__":
     elif args.command == 'start':
         if not args.mode:
             start.print_help()
+            os._exit(0)
         elif args.mode == 'dev':
             Modes.dev()
             __log__.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')

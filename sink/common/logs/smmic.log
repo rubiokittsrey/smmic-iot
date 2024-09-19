@@ -1,0 +1,10 @@
+2024-09-19 16:34:10 - INFO - Performing core system checks
+2024-09-19 16:34:10 - DEBUG - Found interface 'eth0' checking for active addresses
+2024-09-19 16:34:10 - DEBUG - Interface 'eth0' with active IP address 172.28.121.192
+2024-09-19 16:34:10 - DEBUG - Trying PING with gateway address: 192.168.1.1
+2024-09-19 16:34:14 - WARNING - Received KeyboardInterrupt while performing system check!
+2024-09-19 16:36:38 - INFO - Performing core system checks
+2024-09-19 16:36:38 - DEBUG - Found interface 'eth0' checking for active addresses
+2024-09-19 16:36:38 - DEBUG - Interface 'eth0' with active IP address 172.28.121.192
+2024-09-19 16:36:38 - DEBUG - Trying PING with gateway address: 192.168.1.1
+2024-09-19 16:36:40 - WARNING - Received KeyboardInterrupt while performing system check!

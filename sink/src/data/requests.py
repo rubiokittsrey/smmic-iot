@@ -1,5 +1,6 @@
 # README
 # this is the api request module that should be used to make calls to the api
+# its build around the aiohttp python library that allows for concurrent requests
 # TODO: implement support for django websockets
 
 # third-party

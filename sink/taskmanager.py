@@ -39,10 +39,33 @@ async def __dev_test_task__(msg: dict) -> None:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
 async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
+    aio_queue_topics = ['smmic/sensor/data', 'smmic/sink/data', 'smmic/sys/data']
+    hardware_queue_topics = []
+    test_topics = ['/dev/test']
+
     async with semaphore:
-        
-        if msg['topic'] == '/dev/test':
+
+        if msg['topic'] in test_topics:
             await __dev_test_task__(msg)
+
+        if msg['topic'] in aio_queue_topics:
+            if __msg_to_queue__(aio_queue, msg):
+                # TODO: refactor to implement proper return value
+                return
+
+# internal function to put messages to queue
+# abstract function that handles putting messages to queue primarily used by the delegator
+def __msg_to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
+    if not queue:
+        __log__.error(f"Queue is empty! @ PID {os.getpid()} (taskmanager.__msg_to_queue__)")
+        return False
+    
+    try:
+        queue.put(msg)
+        return True
+    except Exception as e:
+        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} (taskmanager.__msg_to_queue)")
+        return False
 
 # retrieve messages from the queue
 def __from_msg_queue__(queue: multiprocessing.Queue) -> dict | None:
