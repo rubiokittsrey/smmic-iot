@@ -21,13 +21,12 @@ from typing import Callable, Dict, Any
 import src.data.requests as requests
 
 # internal helpers, configurations
-from utils import log_config
+from utils import log_config, map_sensor_payload
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
 
 # TODO: implement decorator
-
 def __from_queue__(queue:multiprocessing.Queue) -> dict | None:
     item: dict | None = None
 
@@ -55,7 +54,8 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
             foo = 'foo'
 
         if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}":
-            requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=msg)
+            data = map_sensor_payload(msg['payload'])
+            await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
         if msg['topic'] == Topics.SENSOR_ALERT:
             foo = 'foo' #TODO: implement sensor alert handling
@@ -83,6 +83,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
 
     if loop:
+        __log__.debug(f"")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
@@ -94,4 +95,6 @@ async def start(queue: multiprocessing.Queue) -> None:
                         asyncio.create_task(__router__(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:
+            # close the aiohttp session client
+            await client.close()
             raise

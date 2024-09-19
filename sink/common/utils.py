@@ -168,30 +168,48 @@ def set_priority(topic: str) -> int | None:
 
             if _split[2] == "data":
                 _priority = priority.MODERATE
-                
-    #     # sensor subtopics
-    #     if _split[1] == "sensor":
-    #         _priority = priority.
 
     return _priority
 
-# TODO: refactor to allow support for other types of sensors
-def map_to_sensor_data(payload: str) -> Dict:
+# maps the payload from the device reading into a dictionary
+# assuming that the shape of the payload (as a string) is:
+# -------
+# sensor_type;
+# device_id;
+# timestamp;
+# reading:value&
+# reading:value&
+# reading:value&
+# reading:value&
+# ...
+# -------
+def map_sensor_payload(payload: str) -> Dict:
     final: Dict = {}
-    split = payload.split(";")
-    data: List = []
 
-    if split[0] == 'sensor_type':
-        data = split[3].split(":")
+    # parse the contents of the payload string
+    outer_split : List[str] = payload.split(";")
+    final.update({
+        'SensorType': outer_split[0],
+        'Sensor_Node': outer_split[1],
+        'timestamp': outer_split[2],
+    })
 
-        final.update([
-            ('sensor_type',split[0]),
-            ('Sensor_Node', split[1]),
-            ('timestamp', split[2]),
-            ('soil_moisture', data[0]),
-            ('humidity', data[1]),
-            ('temperature', data[2]),
-            ('battery_level', data[3]),
-        ])
+    # parse the data from the 3rd index of the payload split
+    data : List[str] = outer_split[3].split("&")
+    for value in data:
+        x = value.split(":")
+        final.update({x[0]: x[1]})
+
+    # if outer_split[0] == 'sensor_type':
+    #     data : List = outer_split[3].split(":")
+    #     final.update([
+    #         ('sensor_type',outer_split[0]),
+    #         ('Sensor_Node', outer_split[1]),
+    #         ('timestamp', outer_split[2]),
+    #         ('soil_moisture', data[0]),
+    #         ('humidity', data[1]),
+    #         ('temperature', data[2]),
+    #         ('battery_level', data[3]),
+    #     ])
 
     return final

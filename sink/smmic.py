@@ -11,8 +11,6 @@ import argparse
 import os
 import asyncio
 import multiprocessing
-import random
-import paho.mqtt.client as paho_mqtt
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple

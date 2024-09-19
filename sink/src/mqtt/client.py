@@ -5,7 +5,7 @@ import logging
 import os
 import multiprocessing
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
-from typing import Any
+from typing import Any, List
 
 # internal
 from settings import Broker, APPConfigurations, get_topics, DevTopics
@@ -51,11 +51,12 @@ def __on_publish__(client: paho_mqtt.Client, userData: Any, mid: int, rc: reason
     return
 
 def __on_subscribe__(client: paho_mqtt.Client, userdata, mid, reason_code_list, properties):
-    #TODO: fix this shit code
     __log__.debug(f"Callback client subscribed to topic: {__subscriptions__[0]}")
     __subscriptions__.pop(0)
+    # NOTE: ^ temporary lazy workaround
+    # TODO: fix this shit code
 
-def __subscribe__(client: paho_mqtt.Client | None) -> None:
+def __subscribe__(client: paho_mqtt.Client) -> None:
     app, sys = get_topics()
     topics = app + sys
 
@@ -63,7 +64,6 @@ def __subscribe__(client: paho_mqtt.Client | None) -> None:
 
     global __subscriptions__
 
-    if not client: return
     for topic in topics:
         try:
             client.subscribe(topic=topic, qos=2)
@@ -87,6 +87,7 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     except Exception as e:
         __log__.error(f"Unable to establish successful connection with broker: {e}")
         return False
+    
     __subscribe__(_client)
     
     __CLIENT_STAT__ = status.CONNECTED

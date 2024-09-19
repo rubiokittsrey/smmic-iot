@@ -70,15 +70,15 @@ if __name__ == "__main__":
         data = {
             'SensorType' : 'soil_moisture',
             'Sensor_Node' : 'fd7b1df2-3822-425c-b4c3-e9859251728d', # id
+            'timestamp' : str(datetime.now()),
             'soil_moisture' : 100,
             'humidity' : 100,
             'temperature' : 100,
-            'battery_level' : 100,
-            'timestamp' : str(datetime.now())
+            'battery_level' : 100
         }
         url = f"{settings.APIRoutes.BASE_URL}{settings.APIRoutes.SENSOR_DATA}"
 
         for i in range(len(api_req_funcs)):
-
+            
             if args.function == api_req_funcs[i][0]:
                 loop.run_until_complete(api_test_req(url, data))

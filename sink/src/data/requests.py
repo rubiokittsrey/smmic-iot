@@ -71,6 +71,7 @@ async def get_req(
         __log__.debug(f"Get request successful: {response.status} -> {await response.json()}")
         return response
 
+# TODO: create a unit test at api_test.py
 @__req__
 async def post_req(
     session: aiohttp.ClientSession,
@@ -83,7 +84,8 @@ async def post_req(
         response.raise_for_status()
         __log__.debug(f"Post request successful: {response.status} -> {await response.json()}")
         return response
-    
+
+# TODO: create a unit test at api_test.py
 @__req__
 async def put_req(
     session: aiohttp.ClientSession,
@@ -97,6 +99,7 @@ async def put_req(
         __log__.debug(f"Put request successful: {response.status} -> {await response.json()}")
         return response
 
+# TODO: create a unit test at api_test.py
 @__req__
 async def patch_req(
         session: aiohttp.ClientSession,
@@ -110,6 +113,7 @@ async def patch_req(
         __log__.debug(f"Patch request successful: {response.status} -> {await response.json()}")
         return response
 
+# TODO: create a unit test at api_test.py
 @__req__
 async def delete_req(
         session: aiohttp.ClientSession,
