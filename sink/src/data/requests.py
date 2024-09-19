@@ -32,7 +32,7 @@ def __req__(func: Callable) -> Any:
             try:
                 response = await func(*args, **kwargs)
                 end = time.time()
-                __log__.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
+                __log__.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
                 return response
             except aiohttp.ClientConnectionError as e:
                 __log__.error(f"aiohttp.ClientConnectionError raised at requests.{func.__name__}: {str(e)}")
@@ -52,7 +52,7 @@ def __req__(func: Callable) -> Any:
         __log__.error(f"Request failed at requests.{func.__name__}: max attempts reached")
 
         end = time.time()
-        __log__.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed)")
+        __log__.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed)")
         return None
     
     return _wrapper

@@ -18,7 +18,7 @@ from typing import Tuple
 # internal core modules
 from src.hardware import network
 from src.mqtt import service, client
-from src.data import aioclient
+from src.data import aiohttpclient
 import taskmanager
 
 # internal helpers, configs
@@ -64,7 +64,7 @@ def run_aio_client(queue: multiprocessing.Queue) -> None:
     # TODO: implement
     if loop:
         try:
-            loop.run_until_complete(aioclient.start(queue))
+            loop.run_until_complete(aiohttpclient.start(queue))
         except asyncio.CancelledError or KeyboardInterrupt:
             raise
         except Exception as e:

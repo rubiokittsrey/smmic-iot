@@ -1,41 +1,38 @@
-import asyncio
-import heapq
+# third-party
+import time
+import datetime
+from random import randint
+from paho.mqtt import client as mqtt, enums
 
-class PrioritizedTask:
-    def __init__(self, priority, task):
-        self.priority = priority
-        self.task = task
+# internal
+from settings import Topics, Broker
 
-    def __lt__(self, other):
-        return self.priority < other.priority
+client = mqtt.Client(client_id="test_pub1")
+client.connect('192.168.1.25', 1883)
+client.loop_start()
 
-async def worker(name: str, duration: int, semaphore: asyncio.Semaphore):
-    async with semaphore:
-        print(f"Task {name} started")
-        await asyncio.sleep(duration)  # Simulating a blocking task
-        print(f"Task {name} completed")
+k = 0
+while True:
+    sensor_type: str = "soil_moisture"
+    device_id: str = "fd7b1df2-3822-425c-b4c3-e9859251728d"
+    timestamp: str = str(datetime.datetime.now())
+    sm: int = randint(60, 94)
+    hm: int = randint(60, 94)
+    tmp: int = randint(20, 25)
+    batt: int = randint(50, 100)
+    data = f"soil_moisture:{sm}&humidity:{hm}&temperature:{tmp}&battery_level:{batt}"
+    payload = f"{sensor_type};{device_id};{timestamp};{data}"
+    try:
+        msg = client.publish(
+            topic=f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}",
+            payload=payload,
+            qos=1
+        )
+        msg.wait_for_publish()
+        if msg.is_published():
+            print(payload)
+    
+    except Exception as e:
+        print(e)
 
-async def task_scheduler(priority_queue, semaphore):
-    tasks = []
-    while not priority_queue.empty():
-        prioritized_task = await priority_queue.get()
-        tasks.append(prioritized_task.task)
-
-    # Run tasks concurrently with semaphore limit
-    await asyncio.gather(*tasks)
-
-async def main():
-    priority_queue = asyncio.PriorityQueue()
-    semaphore = asyncio.Semaphore(2)  # Allow up to 2 tasks to run concurrently
-
-    # Add tasks with different priorities
-    await priority_queue.put(PrioritizedTask(2, asyncio.create_task(worker('Low Priority', 3, semaphore))))
-    await priority_queue.put(PrioritizedTask(1, asyncio.create_task(worker('High Priority', 2, semaphore))))
-    await priority_queue.put(PrioritizedTask(3, asyncio.create_task(worker('Very Low Priority', 1, semaphore))))
-    await priority_queue.put(PrioritizedTask(1, asyncio.create_task(worker('Medium Priority', 2, semaphore))))
-
-    # Process tasks based on priority, but with semaphore limiting concurrency
-    await task_scheduler(priority_queue, semaphore)
-
-# Run the event loop
-asyncio.run(main())
+    time.sleep(300)

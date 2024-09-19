@@ -150,7 +150,7 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
 
     con = await __connect_loop__(_client, _msg_handler)
     if con:
-        __log__.info(f"Callback client running and connected @ PID: {os.getpid()}")
+        __log__.info(f"Paho.MQTT CallbackClient running and connected @ PID: {os.getpid()}")
 
     # keep this client thread alive
     while True:

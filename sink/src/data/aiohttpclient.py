@@ -83,7 +83,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
 
     if loop:
-        __log__.debug(f"")
+        __log__.info(f"AioHTTP SessionClient active @ PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
@@ -91,7 +91,7 @@ async def start(queue: multiprocessing.Queue) -> None:
 
                     # if an item is retrieved
                     if client and item:
-                        __log__.debug(f"aioClient @ PID {os.getpid()} received message from queue (topic: {item['topic']}, payload: {item['payload']}, timestamp: {item['timestamp']})")
+                        __log__.debug(f"aioClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(__router__(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:

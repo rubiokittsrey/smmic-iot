@@ -51,13 +51,13 @@ async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: mult
         if msg['topic'] in aio_queue_topics:
             if __msg_to_queue__(aio_queue, msg):
                 # TODO: refactor to implement proper return value
-                return
+                return True
 
 # internal function to put messages to queue
 # abstract function that handles putting messages to queue primarily used by the delegator
 def __msg_to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
     if not queue:
-        __log__.error(f"Queue is empty! @ PID {os.getpid()} (taskmanager.__msg_to_queue__)")
+        __log__.error(f"Invalid queue object {queue}! @ PID {os.getpid()} (taskmanager.__msg_to_queue__)")
         return False
     
     try:
@@ -113,10 +113,10 @@ async def run(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if msg:
-                        __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']}, payload: {msg['payload']}, timestamp: {msg['timestamp']})")
+                        __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
                         asyncio.create_task(__delegator__(semaphore=semaphore, msg=msg, aio_queue=aio_queue, hardware_queue=hardware_queue))
 
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
                     
         except KeyboardInterrupt or asyncio.CancelledError:
             raise

@@ -171,6 +171,26 @@ def set_priority(topic: str) -> int | None:
 
     return _priority
 
+# checks if a number is a float or an int
+# returns None if neither
+def is_num(var) -> type[float | int] | None:
+    _type: type[float | int] | None = None
+
+    try:
+        int_var = int(var)
+        _type = int
+    except ValueError:
+        pass
+
+    if _type is None:
+        try:
+            float_var = float(var)
+            _type = float
+        except ValueError:
+            pass
+
+    return _type
+
 # maps the payload from the device reading into a dictionary
 # assuming that the shape of the payload (as a string) is:
 # -------
@@ -197,8 +217,15 @@ def map_sensor_payload(payload: str) -> Dict:
     # parse the data from the 3rd index of the payload split
     data : List[str] = outer_split[3].split("&")
     for value in data:
+        # split the key and value of the value string
         x = value.split(":")
-        final.update({x[0]: x[1]})
+        # check the value for a valid num type (int or float)
+        _num_check = is_num(x[1])
+
+        if not _num_check:
+            final.update({x[0]: x[1]})
+        else:
+            final.update({x[0]: _num_check(x[1])})
 
     # if outer_split[0] == 'sensor_type':
     #     data : List = outer_split[3].split(":")
