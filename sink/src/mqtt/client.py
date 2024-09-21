@@ -5,7 +5,7 @@ import logging
 import os
 import multiprocessing
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
-from typing import Any, List
+from typing import Any
 
 # internal
 from settings import Broker, APPConfigurations, get_topics, DevTopics
@@ -51,12 +51,11 @@ def __on_publish__(client: paho_mqtt.Client, userData: Any, mid: int, rc: reason
     return
 
 def __on_subscribe__(client: paho_mqtt.Client, userdata, mid, reason_code_list, properties):
+    #TODO: fix this shit code
     __log__.debug(f"Callback client subscribed to topic: {__subscriptions__[0]}")
     __subscriptions__.pop(0)
-    # NOTE: ^ temporary lazy workaround
-    # TODO: fix this shit code
 
-def __subscribe__(client: paho_mqtt.Client) -> None:
+def __subscribe__(client: paho_mqtt.Client | None) -> None:
     app, sys = get_topics()
     topics = app + sys
 
@@ -64,6 +63,7 @@ def __subscribe__(client: paho_mqtt.Client) -> None:
 
     global __subscriptions__
 
+    if not client: return
     for topic in topics:
         try:
             client.subscribe(topic=topic, qos=2)
@@ -87,7 +87,6 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     except Exception as e:
         __log__.error(f"Unable to establish successful connection with broker: {e}")
         return False
-    
     __subscribe__(_client)
     
     __CLIENT_STAT__ = status.CONNECTED
@@ -150,7 +149,7 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
 
     con = await __connect_loop__(_client, _msg_handler)
     if con:
-        __log__.info(f"Paho.MQTT CallbackClient running and connected @ PID: {os.getpid()}")
+        __log__.info(f"Callback client running and connected @ PID: {os.getpid()}")
 
     # keep this client thread alive
     while True:
@@ -216,14 +215,9 @@ class Handler:
         _topic = message.topic
         _timestamp = message.timestamp
         _payload = str(message.payload.decode('utf-8'))
-        _priority = set_priority(_topic)
-
-        if not _priority:
-            __log__.debug(f"Cannot assert priority of message from topic: {_topic}, setting priority to moderate instead")
-            _priority = priority.MODERATE
 
         try:
-            self.__msg_queue__.put({'priority': _priority, 'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+            self.__msg_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
             __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
 

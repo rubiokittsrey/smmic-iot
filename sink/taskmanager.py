@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Dict
 
 # internal helpers, configs
-from utils import log_config
+from utils import log_config, set_priority, priority
 
 __log__ = log_config(logging.getLogger(__name__))
 
@@ -114,6 +114,14 @@ async def run(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue
                     # TODO: implement task handling for different types of messages
                     if msg:
                         __log__.debug(f"Task manager @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
+
+                        # assign a priority for the task
+                        _priority = set_priority(msg['topic'])
+
+                        if not _priority:
+                            __log__.debug(f"Cannot assert priority of message from topic: {msg['topic']}, setting priority to moderate instead")
+                            _priority = priority.MODERATE
+
                         asyncio.create_task(__delegator__(semaphore=semaphore, msg=msg, aio_queue=aio_queue, hardware_queue=hardware_queue))
 
                     await asyncio.sleep(0.05)

@@ -92,12 +92,18 @@ def network_check() -> int:
     if not ip:
         return status.FAILED
     
+    _ping_loss_tolerance = 3 # the amount of loss (out of 5) that can be tolerated
+
     __log__.debug(f'Trying PING with gateway address: {settings.APPConfigurations.GATEWAY}')
     sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = __ping__(settings.APPConfigurations.GATEWAY)
 
     if errors:
-        __log__.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}!')
+        __log__.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}')
         return status.FAILED
+    elif packet_loss:
+        if int(packet_loss) >= (_ping_loss_tolerance * 2) * 10:
+            __log__.warning(f'PING request to gateway {settings.APPConfigurations.GATEWAY} returned with packet loss higher than ping loss tolerance ({(_ping_loss_tolerance * 2) * 10}%)')
+            return status.FAILED
 
     return status.SUCCESS
 

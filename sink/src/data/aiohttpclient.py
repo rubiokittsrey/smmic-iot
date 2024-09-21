@@ -57,7 +57,7 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
             data = map_sensor_payload(msg['payload'])
             await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
-        if msg['topic'] == Topics.SENSOR_ALERT:
+        if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
             foo = 'foo' #TODO: implement sensor alert handling
 
 # TODO: documentation

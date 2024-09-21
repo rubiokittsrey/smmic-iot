@@ -105,8 +105,11 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # first, spawn and run the task manager process
         task_manager_p = multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs)
         aio_client_p = multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue})
-
+        
+        # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
         task_manager_p.start()
+
+        # the aiohttp client process handles requests to and from the api
         aio_client_p.start()
 
         # pass the msg_queue to the handler object
@@ -202,7 +205,7 @@ def sys_check() -> Tuple[int, int | None]:
         else:
             core_status = status.FAILED
     else:
-        __log__.critical(f'Network check returned with errors, cannot proceed with operation')
+        __log__.critical(f'Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED
 
     return core_status, api_status
