@@ -58,7 +58,7 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
             await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
         if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
-            foo = 'foo' #TODO: implement sensor alert handling
+            await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:
@@ -83,7 +83,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
 
     if loop:
-        __log__.info(f"AioHTTP SessionClient active @ PID {os.getpid()}")
+        __log__.info(f"AioHTTP Session Client subprocess active @ PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:

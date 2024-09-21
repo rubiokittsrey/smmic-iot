@@ -1,44 +1,32 @@
-# third-party
-from paho.mqtt import client as paho_mqtt, enums
-from typing import Any, List
-from secrets import token_urlsafe
-import time
+import asyncio
 
-__subscribed_topics__ = []
-
-_topics = [
-        '$SYS/broker/clients/active',
-    ]
-
-def on_c(client: paho_mqtt.Client, userdata: Any, flags, rc, properties) -> None:
-    print(f"{client._client_id}: connected")
-
-def on_msg(client: paho_mqtt.Client, userdata: Any, msg: paho_mqtt.MQTTMessage) -> None:
-    print(f"{msg.topic}: {msg.payload.decode('utf-8')}")
-
-def subscribe(client: paho_mqtt.Client, topics: List[str]) -> None:
-    for topic in topics:
-        client.subscribe(topic, qos=1)
-
-def add_callbacks(client: paho_mqtt.Client, topics: List[str]) -> None:
-    for topic in topics:
-        client.message_callback_add(topic, on_msg)
-
-client = paho_mqtt.Client(callback_api_version=enums.CallbackAPIVersion.VERSION2, client_id="sys_test2")
-client.on_connect = on_c
-add_callbacks(client, _topics)
-client.connect('localhost', 1883)
-client.loop_start()
-subscribe(client, _topics)
-
-# keep thread alive
-while True:
-    payload = token_urlsafe(8)
+async def indefinite_task():
     try:
-        pub = client.publish(topic='/dev/test', payload=payload.encode('utf-8'), qos=1)
-        pub.wait_for_publish()
-        print(f"{client._client_id} published: {payload}")
-    except Exception as e:
-        print(f"error publishing message: {str(e)}")
+        while True:
+            print("Indefinite task running... Press Ctrl+C to stop.")
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        print("Indefinite task was cancelled.")
+    finally:
+        print("Cleaning up indefinite task.")
 
-    time.sleep(10)
+def main():
+    loop = asyncio.new_event_loop()  # Create a new event loop
+    asyncio.set_event_loop(loop)     # (Optional) Set it as the current event loop
+
+    task = loop.create_task(indefinite_task())  # Create the indefinite task
+    try:
+        loop.run_forever()  # Run the loop indefinitely
+    except KeyboardInterrupt:
+        print("\nReceived KeyboardInterrupt! Stopping the loop...")
+        task.cancel()  # Cancel the indefinite task
+        try:
+            loop.run_until_complete(task)  # Wait for the task to finish cleaning up
+        except asyncio.CancelledError:
+            pass  # If the task was cancelled, we can ignore this
+    finally:
+        loop.close()  # Close the loop
+        print("Event loop closed.")
+
+if __name__ == "__main__":
+    main()

@@ -103,6 +103,7 @@ async def run(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue
         return
 
     if loop:
+        __log__.info(f"Task Manager subprocess active @ PID {os.getpid()}")
         # use the threadpool executor to run the monitoring function function that retrieves data from the queue
         try:
             with ThreadPoolExecutor() as pool:
