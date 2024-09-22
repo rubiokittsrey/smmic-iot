@@ -18,7 +18,7 @@ from typing import Tuple
 # internal core modules
 from src.hardware import network
 from src.mqtt import service, client
-from src.data import aiohttpclient
+from src.data import aiohttpclient, sysmonitor
 import taskmanager
 
 # internal helpers, configs
@@ -29,7 +29,7 @@ __log__ = log_config(logging.getLogger(__name__))
 
 # runs the task_manager asyncio event loop
 # this loop is important to allow concurrent task execution
-def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> None:
+def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.new_event_loop()
@@ -41,15 +41,19 @@ def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessin
     if loop:
         # the task manager module
         # handles the messages incoming from the queue
-        taskmanager_t = loop.create_task(taskmanager.run(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue))
+        taskmanager_t = loop.create_task(taskmanager.start(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue))
+        sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, msg_queue=msg_queue))
+        # TODO: start he sysmonitor task here, handle cancellation properly
         try:
             loop.run_forever()
         except KeyboardInterrupt:
             __log__.debug(f"Closing the taskmanager loop and exiting process @ PID {os.getpid()}")
             taskmanager_t.cancel()
+            sysmonitor_t.cancel()
             # await cleanup
             try:
                 loop.run_until_complete(taskmanager_t)
+                loop.run_until_complete(sysmonitor_t)
             except asyncio.CancelledError:
                 pass
             raise
@@ -109,11 +113,13 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     msg_queue = multiprocessing.Queue()
     aio_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
+    sys_queue = multiprocessing.Queue()
 
     tsk_mngr_kwargs = {
         'msg_queue': msg_queue,
         'aio_queue': aio_queue,
-        'hardware_queue': hardware_queue
+        'hardware_queue': hardware_queue,
+        'sys_queue': sys_queue
     }
 
     task_manager_p: multiprocessing.Process | None = None
@@ -131,7 +137,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
-        handler = client.Handler(msg_queue)
+        handler = client.Handler(msg_queue=msg_queue, sys_queue=sys_queue)
         callback_client_task = asyncio.create_task(client.start_client(handler.msg_callback))
 
         # ensures that the callback_client task is done
@@ -156,7 +162,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
         # keep the main thread alive
         while True:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
         
     except Exception as e:
         __log__.error(f"Parent process called exception error: {str(e)}")

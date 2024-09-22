@@ -58,11 +58,14 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
             await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
         if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
-            await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
+            return # wala lang sa kapoy paman
+            # TODO: api
+            #__log__.debug(f"Received sink node data: {msg['payload']}")
+            #await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
     # this is important to allow to run non-blocking message retrieval in the executor
@@ -91,7 +94,7 @@ async def start(queue: multiprocessing.Queue) -> None:
 
                     # if an item is retrieved
                     if client and item:
-                        __log__.debug(f"aioClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
+                        __log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(__router__(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:

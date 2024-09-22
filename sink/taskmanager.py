@@ -10,6 +10,7 @@ from typing import Callable, Any, Dict
 
 # internal helpers, configs
 from utils import log_config, set_priority, priority
+from settings import APPConfigurations, Topics, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
 
@@ -39,8 +40,8 @@ async def __dev_test_task__(msg: dict) -> None:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
 async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
-    aio_queue_topics = ['smmic/sensor/data', 'smmic/sink/data', 'smmic/sys/data']
-    hardware_queue_topics = []
+    aio_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}'] # TODO: update the registered topics here
+    hardware_queue_topics = [] # TODO: implement this
     test_topics = ['/dev/test']
 
     async with semaphore:
@@ -88,10 +89,10 @@ def __from_msg_queue__(queue: multiprocessing.Queue) -> dict | None:
 # * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
 #
-async def run(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> None:
+async def start(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     # TODO: look into this priority queue
     # priority_queue = asyncio.PriorityQueue()
 
@@ -99,12 +100,12 @@ async def run(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} task_manager() child process: {e}")
+        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} taskmanager child process: {e}")
         return
 
     if loop:
         __log__.info(f"Task Manager subprocess active @ PID {os.getpid()}")
-        # use the threadpool executor to run the monitoring function function that retrieves data from the queue
+        # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             with ThreadPoolExecutor() as pool:
                 while True:

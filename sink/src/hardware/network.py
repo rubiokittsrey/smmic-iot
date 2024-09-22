@@ -17,7 +17,7 @@ __log__ = log_config(logging.getLogger(__name__))
 # check primary interface and see if it has an active ip address
 # returns the interface and the ip
 def __check_interface__() -> Tuple[str, Optional[str]]:
-    interface = settings.APPConfigurations.NETWORK_INTERFACE
+    interface = settings.APPConfigurations.PRIMARY_NET_INTERFACE
     ip = None
     interfaces = psutil.net_if_addrs()
     

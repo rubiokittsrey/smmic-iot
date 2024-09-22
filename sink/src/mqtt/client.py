@@ -8,7 +8,7 @@ from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
 
 # internal
-from settings import Broker, APPConfigurations, get_topics, DevTopics
+from settings import Broker, APPConfigurations, Topics, DevTopics
 from utils import log_config, status, priority, set_priority
 
 # internal log object
@@ -56,7 +56,7 @@ def __on_subscribe__(client: paho_mqtt.Client, userdata, mid, reason_code_list, 
     __subscriptions__.pop(0)
 
 def __subscribe__(client: paho_mqtt.Client | None) -> None:
-    app, sys = get_topics()
+    app, sys = Topics.get_topics()
     topics = app + sys
 
     topics.append(DevTopics.TEST)
@@ -97,6 +97,11 @@ async def __connect_loop__(_client: paho_mqtt.Client | None, _msg_handler: paho_
     # add the message callback handler
     _client.message_callback_add(DevTopics.TEST, _msg_handler)
     _client.message_callback_add("smmic/#", _msg_handler)
+
+    __, sys = Topics.get_topics()
+
+    for topic in sys:
+        _client.message_callback_add(topic, _msg_handler)
 
     return True
 
@@ -197,8 +202,9 @@ async def shutdown_client() -> bool:
 
 # necessary handler class in order to include the usage of the Queue object in the message callback of the client
 class Handler:
-    def __init__(self, __msg_queue__: multiprocessing.Queue) -> None:
-        self.__msg_queue__: multiprocessing.Queue = __msg_queue__
+    def __init__(self, msg_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+        self.__msg_queue__: multiprocessing.Queue = msg_queue
+        self.__sys_queue__: multiprocessing.Queue = sys_queue
     
     # the message callback function
     # routes the messages received by the client on relevant topics to the queue
@@ -215,9 +221,11 @@ class Handler:
         _topic = message.topic
         _timestamp = message.timestamp
         _payload = str(message.payload.decode('utf-8'))
-
         try:
-            self.__msg_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+            if _topic.startswith("$SYS"):
+                self.__sys_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+            else:    
+                self.__msg_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
             __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
 

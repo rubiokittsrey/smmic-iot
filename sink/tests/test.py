@@ -9,20 +9,51 @@ import time
 __subscribed_topics__ = []
 
 _topics = [
-        '$SYS/broker/clients/active',
+        '$SYS/broker/clients/connected',
+        '$SYS/broker/clients/total',
         '$SYS/broker/subscriptions/count',
         '$SYS/broker/bytes/sent', # total number of bytes sent since the broker started
         '$SYS/broker/bytes/received', # total number of bytes received since the broker started
         '$SYS/broker/messages/received',
         '$SYS/broker/messages/sent',
-        '$SYS/broker/version'
     ]
 
+__ACTIVE_CLIENTS__ : int = 0
+__CLIENTS_TOTAL__ : int = 0
+__SUB_COUNT__ : int = 0
+__BYTES_SENT__ : int = 0
+__BYTES_RECEIVED__ : int = 0
+__MESSAGES_RECEIVED__ : int = 0
+__MESSAGES_SENT__ : int = 0
+
 def on_c(client: paho_mqtt.Client, userdata: Any, flags, rc, properties) -> None:
-    print(f"{client._client_id}: connected")
+    print(f"{client._client_id.decode('utf-8')}: connected")
 
 def on_msg(client: paho_mqtt.Client, userdata: Any, msg: paho_mqtt.MQTTMessage) -> None:
-    print(f"{msg.topic}: {str(msg.payload)}")
+    global __ACTIVE_CLIENTS__, __CLIENTS_TOTAL__, __SUB_COUNT__, __BYTES_SENT__, __BYTES_RECEIVED__, __MESSAGES_RECEIVED__, __MESSAGES_SENT__
+
+    if msg.topic == _topics[0]:
+        __ACTIVE_CLIENTS__ = int(msg.payload)
+    
+    elif msg.topic == _topics[1]:
+        __CLIENTS_TOTAL__ = int(msg.payload)
+
+    elif msg.topic == _topics[2]:
+        __SUB_COUNT__ = int(msg.payload)
+
+    elif msg.topic == _topics[3]:
+        __BYTES_SENT__ = int(msg.payload)
+
+    elif msg.topic == _topics[4]:
+        __BYTES_RECEIVED__ = int(msg.payload)
+
+    elif msg.topic == _topics[5]:
+        __MESSAGES_RECEIVED__ = int(msg.payload)
+    
+    elif msg.topic == _topics[6]:
+        __MESSAGES_SENT__ = int(msg.payload)
+
+    print(f"{msg.topic}: {msg.payload.decode('utf-8')}")
 
 def subscribe(client: paho_mqtt.Client, topics: List[str]) -> None:
     client.subscribe("$SYS/#", qos=1)
@@ -31,16 +62,34 @@ def subscribe(client: paho_mqtt.Client, topics: List[str]) -> None:
 
 def add_callbacks(client: paho_mqtt.Client, topics: List[str]) -> None:
     for topic in topics:
-        print(f"{client._client_id} subscribed to: {topic}")
+        print(f"{client._client_id.decode('utf-8')} subscribed to: {topic}")
         client.message_callback_add(topic, on_msg)
 
 client = paho_mqtt.Client(callback_api_version=enums.CallbackAPIVersion.VERSION2, client_id="sys_test")
 client.on_connect = on_c
 add_callbacks(client, _topics)
-client.connect('localhost', 1883)
+client.connect('192.168.1.25', 1883)
 client.loop_start()
 subscribe(client, _topics)
 
+def get_vals() -> str:
+    _str = f"c_active: {__ACTIVE_CLIENTS__}, c_total: {__CLIENTS_TOTAL__}, s_count: {__SUB_COUNT__}, b_sent: {__BYTES_SENT__}, b_recieved: {__BYTES_RECEIVED__}, m_sent: {__MESSAGES_SENT__}, m_received: {__MESSAGES_RECEIVED__}"
+
+    return _str
+
 # keep thread alive
-while True:
-    time.sleep(0.5)
+try:
+    while True:
+        time.sleep(0.5)
+except KeyboardInterrupt:
+    msg_map : dict = {
+        'active_clients': __ACTIVE_CLIENTS__,
+        'total_clients': __CLIENTS_TOTAL__,
+        'sub_count': __SUB_COUNT__,
+        'bytes_sent': __BYTES_SENT__,
+        'bytes_received': __BYTES_RECEIVED__,
+        'messages_sent': __MESSAGES_SENT__,
+        'messages_received': __MESSAGES_RECEIVED__
+    }
+
+    print(msg_map)

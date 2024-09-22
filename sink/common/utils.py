@@ -216,6 +216,11 @@ def map_sensor_payload(payload: str) -> Dict:
 
     # parse the data from the 3rd index of the payload split
     data : List[str] = outer_split[3].split("&")
+
+    # remove empty strings in the list
+    for i in range(data.count("")):
+        data.remove("")
+
     for value in data:
         # split the key and value of the value string
         x = value.split(":")
@@ -238,5 +243,44 @@ def map_sensor_payload(payload: str) -> Dict:
     #         ('temperature', data[2]),
     #         ('battery_level', data[3]),
     #     ])
+
+    return final
+
+# maps the payload from the sink data into a dictionary
+# assuming that the shape of the payload (as a string) is:
+# ------
+# device_id;
+# timestamp;
+# key:value&
+# key:value&
+# key:value&
+# key:value&
+# ..........
+# ------
+def map_sink_payload(payload: str) -> Dict:
+    final: Dict = {}
+
+    outer_split: List[str] = payload.split(';')
+    final.update({
+        'device_id': outer_split[0],
+        'timestamp': outer_split[1]
+    })
+
+    data: List[str] = outer_split[2].split("&")
+
+    # remove empty strings in the list
+    for i in range(data.count("")):
+        data.remove("")
+
+    for value in data:
+        # split the key and value of the value string
+        x = value.split(";")
+        # check the value for a valid num type (int or float)
+        _num_check = is_num(x[1])
+
+        if not _num_check:
+            final.update({x[0]: x[1]})
+        else:
+            final.update({x[0]: _num_check(x[1])})
 
     return final
