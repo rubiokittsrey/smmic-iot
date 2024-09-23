@@ -4,16 +4,17 @@
 
 # third-party
 import time
+import subprocess
 import multiprocessing
 import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import log_config
+from utils import log_config, is_num
 from settings import APPConfigurations, Topics
 
 __log__ = log_config(logging.getLogger(__name__))
@@ -61,11 +62,13 @@ def __from_sys_queue__(queue: multiprocessing.Queue) -> dict | None:
 
     return msg
 
+# put the current values to the aiohttp queue
+# intervals of 5 minutes
 async def __put_to_queue__(queue: multiprocessing.Queue):
     msg: dict | None = {}
 
     while True:
-        await asyncio.sleep(300)
+        await asyncio.sleep(300) # execute every 5 minutes
         _d = [
                 f'connected_clients:{__CONNECTED_CLIENTS__}',
                 f'total_clients:{__CLIENTS_TOTAL__}',
@@ -86,6 +89,51 @@ async def __put_to_queue__(queue: multiprocessing.Queue):
         except Exception as e:
             __log__.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
 
+# returns the total available memory (in kilobytes) of the device
+# see output of 'free': https://www.turing.com/kb/how-to-use-the-linux-free-command
+def mem_check() -> Tuple[List[int|float], List[int|float]]:
+    mem_f : List[int | float] = []
+    swap_f : List[int | float] = []
+
+    try:
+        # get output of free, decode and then split each newline
+        # 
+        output = subprocess.check_output(["free"])
+        decoded = output.decode('utf-8')
+        s_output = decoded.split("\n")
+
+        # the mem and swap out as lists
+        # assign to cache as Tuples with the final mem and swap lists
+        mem_split : List[Any] = s_output[1].split(' ')
+        swap_split: List[Any] = s_output[2].split(' ')
+        cache = [(mem_split, mem_f), (swap_split, swap_f)]
+        
+        # remove any empty occurence within each split
+        # and pop the first items 'Mem:' or 'Swap:'
+        for split, f in cache:
+            for i in range(split.count(' ')):
+                split.remove('')
+
+        # the final mem and swap output list
+        # contains num values (int / float)
+        # convert each content of list to num and append to mem_f
+        # then return mem_f [total, used, free, shared, buff/cache, available]
+        for split, f in cache:
+            for item in split:
+                _t = is_num(item)
+                if not _t:
+                    pass
+                else:
+                    f.append(_t(item))
+
+    except Exception as e:
+        __log__.error(f"Unhandled exception occured at unit.__mem_check__: {str(e)}")
+
+    return mem_f, swap_f
+
+
+
+# start this module / coroutine
 async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(1)
 
