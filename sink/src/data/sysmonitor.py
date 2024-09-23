@@ -1,4 +1,4 @@
-# the system monitoring module
+ # the system monitoring module
 # description -->>
 # TODO: documentation
 
@@ -25,6 +25,7 @@ __BYTES_SENT__ : int = 0
 __BYTES_RECEIVED__ : int = 0
 __MESSAGES_SENT__ : int = 0
 __MESSAGES_RECEIVED__ : int = 0
+__FREE_MEMORY__ : int = 0
 
 __, __sys_topics__ = Topics.get_topics()
 
