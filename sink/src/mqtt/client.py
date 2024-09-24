@@ -65,9 +65,10 @@ def __subscribe__(client: paho_mqtt.Client | None) -> None:
 
     if not client: return
     for topic in topics:
+        _t = topic if topic.startswith("$") or topic == '/dev/test' else f"{Broker.ROOT_TOPIC}{topic}"
         try:
-            client.subscribe(topic=topic, qos=2)
-            __subscriptions__.append(topic)
+            client.subscribe(topic=_t, qos=2)
+            __subscriptions__.append(_t)
         except Exception as e:
             __log__.warning(f"Unable to subscribe callback client to topics {topic}: {str(e)}")
 
