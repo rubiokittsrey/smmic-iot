@@ -262,7 +262,7 @@ def map_sink_payload(payload: str) -> Dict:
 
     outer_split: List[str] = payload.split(';')
     final.update({
-        'device_id': outer_split[0],
+        'Sink_Node': outer_split[0],
         'timestamp': outer_split[1]
     })
 
@@ -274,7 +274,7 @@ def map_sink_payload(payload: str) -> Dict:
 
     for value in data:
         # split the key and value of the value string
-        x = value.split(";")
+        x = value.split(":")
         # check the value for a valid num type (int or float)
         _num_check = is_num(x[1])
 

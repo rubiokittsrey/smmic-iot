@@ -50,9 +50,9 @@ async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: mult
             await __dev_test_task__(msg)
 
         if msg['topic'] in aio_queue_topics:
-            if __msg_to_queue__(aio_queue, msg):
+            return __msg_to_queue__(aio_queue, msg)
                 # TODO: refactor to implement proper return value
-                return True
+                
 
 # internal function to put messages to queue
 # abstract function that handles putting messages to queue primarily used by the delegator

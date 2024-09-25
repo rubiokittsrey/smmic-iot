@@ -21,7 +21,7 @@ from typing import Callable, Dict, Any
 import src.data.requests as requests
 
 # internal helpers, configurations
-from utils import log_config, map_sensor_payload
+from utils import log_config, map_sensor_payload, map_sink_payload
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
@@ -58,10 +58,11 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
             await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
         if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
-            return # wala lang sa kapoy paman
+            data = map_sink_payload(msg['payload'])
+            #return # wala lang sa kapoy paman
             # TODO: api
             #__log__.debug(f"Received sink node data: {msg['payload']}")
-            #await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
+            await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:
