@@ -86,7 +86,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         __log__.error(f"Failed to create ClientSession object @ PID {os.getpid()} (aioclient child process): {e}")
         return
 
-    if loop:
+    if loop and client:
         __log__.info(f"AioHTTP Session Client subprocess active @ PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
@@ -94,7 +94,7 @@ async def start(queue: multiprocessing.Queue) -> None:
                     item = await loop.run_in_executor(pool, __from_queue__, queue) # non-blocking message retrieval
 
                     # if an item is retrieved
-                    if client and item:
+                    if item:
                         __log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(__router__(semaphore, item, client))
 

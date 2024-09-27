@@ -101,6 +101,12 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
     except Exception as e:
         __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
+    
+    if loop:
+        # the hardware module process
+        # handles all requests coming to and from the api
+        return
+        # hardware_t = loop.create_task(hardware.start(queue))
 
     #TODO: implement
 

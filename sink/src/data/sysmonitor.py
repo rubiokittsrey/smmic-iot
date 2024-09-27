@@ -84,7 +84,7 @@ async def __put_to_queue__(queue: multiprocessing.Queue):
             data = data + f'&{d}'
         payload = f'{APPConfigurations.CLIENT_ID};{datetime.now()};{data}'
         msg.update({'topic':'smmic/sink/data', 'payload':f'{payload}'})
-
+    
         try:
             queue.put(msg)
         except Exception as e:
