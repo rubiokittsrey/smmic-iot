@@ -18,9 +18,6 @@ __log__ = log_config(logging.getLogger(__name__))
 # the global irritaion queue list
 __QUEUE__ : List[str] = []
 __CHANNEL__ = Channels.IRRIGATION
-# setup
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(__CHANNEL__, GPIO.OUT)
 
 # helper funciton to map a payload from the 'smmic/irrigation' topic into a list
 # assuming that the payload (as a string) is:
@@ -65,14 +62,14 @@ async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Qu
         await asyncio.sleep(0.01)
 
 def on(pin):
-    GPIO.output(pin, GPIO.HIGH)
-
-def off(pin):
     GPIO.output(pin, GPIO.LOW)
 
+def off(pin):
+    GPIO.output(pin, GPIO.HIGH)
+
 async def start(queue: multiprocessing.Queue) -> None:
-    off(__QUEUE__)
     global __QUEUE__
+    off(__QUEUE__)
 
     # get event loop
     loop: asyncio.AbstractEventLoop | None = None
@@ -89,17 +86,25 @@ async def start(queue: multiprocessing.Queue) -> None:
         try:
             while True:
                 if len(__QUEUE__) > 0:
+                    # setup
+                    GPIO.setmode(GPIO.BCM)
+                    GPIO.setup(__CHANNEL__, GPIO.OUT)
                     while len(__QUEUE__) > 0:
-                        __log__.debug(f"---------- running ------")
-                        # TODO: add code for relay here
                         try:
                             on(__CHANNEL__)
                         except KeyboardInterrupt:
                             off(__CHANNEL__)
                             GPIO.cleanup()
+                        except Exception as e:
+                            __log__.warning(f"{__name__} raised unhandled exception: {e}")
                         await asyncio.sleep(0.01)
+                    GPIO.cleanup()
                 else:
-                    off(__CHANNEL__)
+                    try:
+                        off(__CHANNEL__)
+                        GPIO.cleanup()
+                    except Exception as e:
+                        pass
                 await asyncio.sleep(0.01)
         except (KeyboardInterrupt, asyncio.CancelledError):
             GPIO.cleanup()
