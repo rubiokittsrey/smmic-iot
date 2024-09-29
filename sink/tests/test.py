@@ -36,4 +36,7 @@ def mqtt_test():
         except Exception as e:
             print(e)
 
-        time.sleep(300)
+        time.sleep(15)
+
+if __name__ == "__main__":
+	mqtt_test()

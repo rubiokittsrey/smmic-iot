@@ -69,7 +69,6 @@ def off(pin):
 
 async def start(queue: multiprocessing.Queue) -> None:
     global __QUEUE__
-    off(__QUEUE__)
 
     # get event loop
     loop: asyncio.AbstractEventLoop | None = None
@@ -86,14 +85,13 @@ async def start(queue: multiprocessing.Queue) -> None:
         try:
             while True:
                 if len(__QUEUE__) > 0:
-                    # setup
+                    # GPIO setup
                     GPIO.setmode(GPIO.BCM)
                     GPIO.setup(__CHANNEL__, GPIO.OUT)
                     while len(__QUEUE__) > 0:
                         try:
                             on(__CHANNEL__)
                         except KeyboardInterrupt:
-                            off(__CHANNEL__)
                             GPIO.cleanup()
                         except Exception as e:
                             __log__.warning(f"{__name__} raised unhandled exception: {e}")
