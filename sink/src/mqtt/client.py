@@ -8,7 +8,7 @@ from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
 
 # internal
-from settings import Broker, APPConfigurations, Topics, DevTopics
+from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE
 from utils import log_config, status, priority, set_priority
 
 # internal log object
@@ -225,7 +225,7 @@ class Handler:
         try:
             if _topic.startswith("$SYS"):
                 self.__sys_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
-            else:    
+            else:
                 self.__msg_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
             __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")

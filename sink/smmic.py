@@ -13,10 +13,10 @@ import asyncio
 import multiprocessing
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple
+from typing import Tuple, List
 
 # internal core modules
-from src.hardware import network
+from src.hardware import hardware, network
 from src.mqtt import service, client
 from src.data import aiohttpclient, sysmonitor
 import taskmanager
@@ -41,19 +41,16 @@ def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessin
     if loop:
         # the task manager module
         # handles the messages incoming from the queue
-        taskmanager_t = loop.create_task(taskmanager.start(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue))
-        sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, msg_queue=msg_queue))
+        taskmanager_t = loop.create_task(taskmanager.start(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue, sys_queue=sys_queue))
         # TODO: start he sysmonitor task here, handle cancellation properly
         try:
             loop.run_forever()
         except KeyboardInterrupt:
             __log__.debug(f"Closing the taskmanager loop and exiting process @ PID {os.getpid()}")
             taskmanager_t.cancel()
-            sysmonitor_t.cancel()
             # await cleanup
             try:
                 loop.run_until_complete(taskmanager_t)
-                loop.run_until_complete(sysmonitor_t)
             except asyncio.CancelledError:
                 pass
             raise
@@ -105,8 +102,22 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
     if loop:
         # the hardware module process
         # handles all requests coming to and from the api
-        return
-        # hardware_t = loop.create_task(hardware.start(queue))
+        hardware_t = loop.create_task(hardware.start(queue))
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            __log__.debug(f"Closing the harware module process and exiting @ PID {os.getpid()}")
+            hardware_t.cancel()
+
+            try:
+                loop.run_until_complete(hardware_t)
+            except asyncio.CancelledError:
+                pass
+            raise
+        except Exception as e:
+            __log__.error(f"Failed to run hardware module loop: {str(e)}")
+        finally:
+            loop.close()
 
     #TODO: implement
 
@@ -128,15 +139,19 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         'sys_queue': sys_queue
     }
 
-    task_manager_p: multiprocessing.Process | None = None
-
     try:
         # first, spawn and run the task manager process
-        task_manager_p = multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs)
-        aio_client_p = multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue})
+        processes : List[multiprocessing.Process] = []
+        # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
+        processes.append(multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs))
+        # the aiohttp client process handles requests to and from the api
+        processes.append(multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue}))
+        # the hardware module process handles hardware tasks received from the mqtt network
+        processes.append(multiprocessing.Process(target=run_hardware_p, kwargs={'queue': hardware_queue}))
 
-        task_manager_p.start() # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
-        aio_client_p.start() # the aiohttp client process handles requests to and from the api
+        for proc in processes:
+            proc.start()
+
         # sub-second delay ensure that all sub-processes are already spawned before starting the callback_client coroutine of this process
         await asyncio.sleep(0.25)
 
@@ -154,12 +169,12 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
             __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
             # terminate the task_manager process
-            task_manager_p.terminate()
-            aio_client_p.terminate()
+            for proc in processes:
+                proc.terminate()
             
             # make sure the processes are joined
-            aio_client_p.join()
-            task_manager_p.join()
+            for proc in processes:
+                proc.join()
 
             # disconnect and shutdown the callback client loop
             await asyncio.gather(client.shutdown_client(), callback_client_task)

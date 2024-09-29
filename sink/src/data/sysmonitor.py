@@ -26,7 +26,7 @@ __BYTES_SENT__ : int = 0
 __BYTES_RECEIVED__ : int = 0
 __MESSAGES_SENT__ : int = 0
 __MESSAGES_RECEIVED__ : int = 0
-__FREE_MEMORY__ : int = 0
+# __FREE_MEMORY__ : int = 0
 
 __, __sys_topics__ = Topics.get_topics()
 
@@ -68,7 +68,7 @@ async def __put_to_queue__(queue: multiprocessing.Queue):
     msg: dict | None = {}
 
     while True:
-        await asyncio.sleep(20) # execute every 5 minutes
+        await asyncio.sleep(300) # execute every 5 minutes
         _d = [
                 f'connected_clients:{__CONNECTED_CLIENTS__}',
                 f'total_clients:{__CLIENTS_TOTAL__}',
@@ -90,15 +90,15 @@ async def __put_to_queue__(queue: multiprocessing.Queue):
         except Exception as e:
             __log__.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
 
-# returns the total available memory (in kilobytes) of the device
-# see output of 'free': https://www.turing.com/kb/how-to-use-the-linux-free-command
+# returns a list of memory usage data (in kilobytes) of the device
+# 'free' docs: https://www.turing.com/kb/how-to-use-the-linux-free-command
+# NOTE: not in use (as of 9/25/2024)
 def mem_check() -> Tuple[List[int|float], List[int|float]]:
     mem_f : List[int | float] = []
     swap_f : List[int | float] = []
 
     try:
         # get output of free, decode and then split each newline
-        # 
         output = subprocess.check_output(["free"])
         decoded = output.decode('utf-8')
         s_output = decoded.split("\n")
@@ -112,12 +112,12 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
         # remove any empty occurence within each split
         # and pop the first items 'Mem:' or 'Swap:'
         for split, f in cache:
-            for i in range(split.count(' ')):
+            for i in range(split.count('')):
                 split.remove('')
 
         # the final mem and swap output list
         # contains num values (int / float)
-        # convert each content of list to num and append to mem_f
+        # convert each conte nt of list to num and append to mem_f
         # then return mem_f [total, used, free, shared, buff/cache, available]
         for split, f in cache:
             for item in split:
@@ -145,7 +145,7 @@ async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Que
         return
 
     if loop:
-        __log__.info(f"System monitor module of taskmanager sub-process active @ PID {os.getpid()}")
+        __log__.info(f"System monitor taskmanager coroutine active @ PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
             # to do handle task cancellation of this

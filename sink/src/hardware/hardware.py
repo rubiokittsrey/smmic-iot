@@ -6,17 +6,33 @@ import asyncio
 import multiprocessing
 import logging
 import os
+from typing import Dict, Any, List, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import log_config
+from utils import log_config, get_from_queue
 from settings import Topics, APPConfigurations
+import src.hardware.irrigation as irrigation
 
 __log__ = log_config(logging.getLogger(__name__))
 
-async def start(queue: multiprocessing.Queue) -> None:
-    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
+__IRRIGATION_QUEUE__: multiprocessing.Queue = multiprocessing.Queue()
+
+# hardware tasks callbacks
+def irrigation_callback(signal : int) -> None:
+    global __IRRIGATION_SIGNAL__
+    __IRRIGATION_SIGNAL__ = signal
+
+async def __delegator__(semaphore: asyncio.Semaphore, task: Dict) -> Any:
+    async with semaphore:
+
+        if task['topic'] == Topics.IRRIGATION:
+            task_payload = irrigation.map_irrigation_payload(task['payload'])
+            if task_payload:
+                __IRRIGATION_QUEUE__.put(task_payload)
+
+async def start(queue: multiprocessing.Queue) -> None:
     # acquire the current running event loop
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -24,13 +40,29 @@ async def start(queue: multiprocessing.Queue) -> None:
     except Exception as e:
         __log__.error(f"Failed to get running event loop @ PID {os.getpid()} (hardware module child process): {e}")
         return
-    
+
     if loop:
         __log__.info(f"Hardware module process active @ PID {os.getpid()}")
+        irrigation.SIGNAL.connect(irrigation_callback)
         try:
-            with ThreadPoolExecutor() as pool:
-                while True:
-                    pass
-                    # item = await loop.run_in_executor(pool, __from_queue__, queue)
+            await __main_loop__(loop, queue)
         except KeyboardInterrupt:
             raise
+
+async def __main_loop__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue):
+    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
+    try:
+        asyncio.create_task(irrigation.start(__IRRIGATION_QUEUE__))
+        with ThreadPoolExecutor() as pool:
+            while True:
+                # message retrieval in non-blocking way
+                task = await loop.run_in_executor(pool, get_from_queue, queue, __name__)
+
+                if task:
+                    if task['topic'] == 'smmic/irrigation':
+
+                        __log__.debug(f"Module {__name__} at PID {os.getpid()} received message from queue (topic: {task['topic']})")
+                        asyncio.create_task(__delegator__(semaphore, task))
+
+    except KeyboardInterrupt:
+        raise

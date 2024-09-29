@@ -27,6 +27,7 @@ def __var_from_env__(key: str) -> Any:
 # global vars
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
+__DEV_MODE__ = False
 
 def set_logging_level(level: int) -> None:
     global LOGGING_LEVEL
@@ -35,6 +36,14 @@ def set_logging_level(level: int) -> None:
 def enable_log_to_file(value: bool) -> None:
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
+
+def dev_mode(val: bool) -> None:
+    global __DEV_MODE__
+    __DEV_MODE__ = val
+
+def __get_dev_mode__() -> bool:
+    return __DEV_MODE__
+DEV_MODE = __get_dev_mode__()
 
 # development configurations
 # class DevConfigs:
@@ -96,6 +105,7 @@ class Topics:
     SYS_MESSAGES_RECEIVED : str = __var_from_env__("BROKER_MESSAGES_RECEIVED")
     SYS_MESSAGES_SENT : str = __var_from_env__("BROKER_MESSAGES_SENT")
     SYS_SUB_COUNT : str = __var_from_env__("BROKER_SUBSCRIPTIONS_COUNT")
+    IRRIGATION : str = __var_from_env__("IRRIGATION_TOPIC")
     
     def get_topics() -> Tuple[List[str], List[str]]:
         _topics: List[str] = []

@@ -5,10 +5,11 @@
 
 # third-party
 import aiohttp
+import asyncio
 import time
 import logging
 import os
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, List, Tuple
 from decimal import Decimal
 
 # internal helpers, configs
@@ -19,41 +20,58 @@ __log__ = log_config(logging.getLogger(__name__))
 
 # request decorator that provides request statistics and handles exception
 # TODO: add other stats, store failed requests, implement failed request protocol
+# returns the response status and the response body
 def __req__(func: Callable) -> Any:
-    async def _wrapper(*args, **kwargs) -> Any:
+    async def _wrapper(*args, **kwargs) -> Tuple[int, dict | None]:
         start = time.time()
         attempt = 0
 
         retries: int = kwargs.get('retries', APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES)
 
-        response: Any
+        res_stat: int = 0
+        res_body: dict | None = None
+        err: List[str] = []
 
         while attempt < retries:
             try:
-                response = await func(*args, **kwargs)
+                res_stat, res_body = await func(*args, **kwargs)
                 end = time.time()
-                __log__.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
-                return response
+                break
+                #return response
             except aiohttp.ClientConnectionError as e:
-                __log__.error(f"aiohttp.ClientConnectionError raised at requests.{func.__name__}: {str(e)}")
+                await asyncio.sleep(3) # sleep for 3 secs (non-blocking) to allow connection to establish
+                err.append(f"aiohttp.ClientConnectionError raised at requests.{func.__name__}: {str(e)}")
             except aiohttp.ClientResponseError as e:
-                __log__.error(f"aiohttp.ClientResponseError raised at requests.{func.__name__}: {str(e)}")
+                err.append(f"aiohttp.ClientResponseError raised at requests.{func.__name__}: {str(e)}")
+            except aiohttp.ClientError as e:
+                err.append(f"aiohttp.ClientError raised at requests.{func.__name__}: {str(e)}")
+            except Exception as e:
+                err.append(f"Unhandled exception raised at requests.{func.__name__}: {str(e)}")
             # except aiohttp.ClientTimeout as e:
             #     print(f"Timeout error occurred: {e}")
-            except aiohttp.ClientError as e:
-                __log__.error(f"aiohttp.ClientError raised at requests.{func.__name__}: {str(e)}")
-            except Exception as e:
-                # Catch any other exceptions
-                __log__.error(f"Unhandled exception raised at requests.{func.__name__}: {str(e)}")
 
             attempt += 1
-            __log__.debug(f"Retrying request... attempt: {attempt}")
-
-        __log__.error(f"Request failed at requests.{func.__name__}: max attempts reached")
-
+                
         end = time.time()
-        __log__.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed)")
-        return None
+
+        # organize similar errors into one log
+        if len(err) > 0:
+            _logged: List[str] = []
+
+            for e in err:
+                if e in _logged:
+                    pass
+                else:
+                    count = err.count(e)
+                    __log__.error((f"({count}) " if count > 1 else "") + e + " ")
+                    _logged.append(e)
+
+        if len(err) == retries:
+            __log__.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
+        else:
+            __log__.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s): {res_body}")
+        
+        return res_stat, res_body
     
     return _wrapper
 
@@ -68,8 +86,11 @@ async def get_req(
 
     async with session.get(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        __log__.debug(f"Get request successful: {response.status} -> {await response.json()}")
-        return response
+        res_json: Any
+        if response:
+            res_json = await response.json()
+        #__log__.debug(f"Get request successful: {response.status} -> {await response.json()}")
+        return res_json
 
 # TODO: create a unit test at api_test.py
 @__req__
@@ -78,12 +99,14 @@ async def post_req(
     url: str,
     data: Dict[str, Any],
     retries: int | None = None,
-    timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Any:
+    timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Tuple[int, dict]:
 
     async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        __log__.debug(f"Post request successful: {response.status} -> {await response.json()}")
-        return response
+        #__log__.debug(f"Post request successful: {response.status} -> {await response.json()}")
+        res_stat = response.status
+        res_body = await response.json()
+        return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
 @__req__
