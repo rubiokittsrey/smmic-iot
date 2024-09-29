@@ -18,6 +18,9 @@ __log__ = log_config(logging.getLogger(__name__))
 # the global irritaion queue list
 __QUEUE__ : List[str] = []
 __CHANNEL__ = Channels.IRRIGATION
+# setup
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(__CHANNEL__, GPIO.OUT)
 
 # helper funciton to map a payload from the 'smmic/irrigation' topic into a list
 # assuming that the payload (as a string) is:
@@ -68,11 +71,8 @@ def off(pin):
     GPIO.output(pin, GPIO.LOW)
 
 async def start(queue: multiprocessing.Queue) -> None:
+    off(__QUEUE__)
     global __QUEUE__
-
-    # setup
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(__CHANNEL__, GPIO.OUT)
 
     # get event loop
     loop: asyncio.AbstractEventLoop | None = None
@@ -90,6 +90,7 @@ async def start(queue: multiprocessing.Queue) -> None:
             while True:
                 if len(__QUEUE__) > 0:
                     while len(__QUEUE__) > 0:
+                        __log__.debug(f"---------- running ------")
                         # TODO: add code for relay here
                         try:
                             on(__CHANNEL__)
@@ -100,7 +101,8 @@ async def start(queue: multiprocessing.Queue) -> None:
                 else:
                     off(__CHANNEL__)
                 await asyncio.sleep(0.01)
-        except KeyboardInterrupt or asyncio.CancelledError:
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            GPIO.cleanup()
             raise
         except Exception as e:
             __log__.error(f"Unhandled exception raised at {__name__} module: {e}")
