@@ -13,6 +13,7 @@ with open(spath, 'r') as sfile:
 __app_net_configs__ = settings_yaml["app_configurations"]["network"] # the application network configurations
 __test_configs__ = settings_yaml["app_configurations"]["tests"] # testing configurations
 __dev_configs__ = settings_yaml["dev_configs"]
+__hardware_configs__ = settings_yaml["hardware_configurations"]
 
 # load the .env variables
 envpath = os.path.join(os.path.dirname(__file__), '../.env')
@@ -89,6 +90,9 @@ class Broker:
 # mqtt dev topics
 class DevTopics:
     TEST = "/dev/test"
+
+class Channels:
+    IRRIGATION = __hardware_configs__["irrigation_channel"]
 
 # mqtt functional topics
 class Topics:

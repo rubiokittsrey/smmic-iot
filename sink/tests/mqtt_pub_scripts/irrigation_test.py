@@ -18,7 +18,8 @@ async def run_test():
     loop = asyncio.get_event_loop()
 
     if loop:
-        while True:
+        tasks = []
+        for i in range(5):
             device_id = token_urlsafe(8)
             timestamp = str(datetime.datetime.now())
             signal = 1
@@ -32,10 +33,11 @@ async def run_test():
                 msg.wait_for_publish()
                 if msg.is_published():
                     print(f"signal on sent: {payload}")
-                asyncio.create_task(__signal_off__(client, device_id))
+                tasks.append(asyncio.create_task(__signal_off__(client, device_id)))
             except Exception as e:
                 print(f"err @ run_test: {e}")
             await asyncio.sleep(10)
+        await asyncio.gather(*tasks)
 
 async def __signal_off__(client: mqtt.Client, device_id: str):
     payload = f"{device_id};{str(datetime.datetime.now())};{0}"
