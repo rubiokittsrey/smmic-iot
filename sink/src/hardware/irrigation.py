@@ -53,7 +53,7 @@ async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Qu
             __log__.debug(f"{__name__}.__watcher__() at PID {os.getpid()} received task from queue")
 
             if task['signal'] == 1:
-                __QUEUE__.append(task['device_id'])
+                __QUEUE__.append(task['device_id']) if task['device_id'] not in __QUEUE__ else None
                 __log__.debug(f"{__name__} queue: {__QUEUE__}")
             else:
                 __QUEUE__.remove(task['device_id'])

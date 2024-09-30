@@ -11,7 +11,7 @@ from settings import Topics, Broker
 
 async def run_test():
     client = mqtt.Client(client_id="irr_test1")
-    client.connect('192.168.1.25', 1883)
+    client.connect('192.168.1.9', 1883)
     client.loop_start()
 
     k = 0
@@ -19,7 +19,7 @@ async def run_test():
 
     if loop:
         tasks = []
-        for i in range(5):
+        for i in range(2):
             device_id = token_urlsafe(8)
             timestamp = str(datetime.datetime.now())
             signal = 1
@@ -41,7 +41,7 @@ async def run_test():
 
 async def __signal_off__(client: mqtt.Client, device_id: str):
     payload = f"{device_id};{str(datetime.datetime.now())};{0}"
-    sleep_time = randint(10, 20)
+    sleep_time = randint(5,10)
     await asyncio.sleep(sleep_time)
     try:
         msg = client.publish(
