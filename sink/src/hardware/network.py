@@ -17,7 +17,7 @@ __log__ = log_config(logging.getLogger(__name__))
 # check primary interface and see if it has an active ip address
 # returns the interface and the ip
 def __check_interface__() -> Tuple[str, Optional[str]]:
-    interface = settings.APPConfigurations.NETWORK_INTERFACE
+    interface = settings.APPConfigurations.PRIMARY_NET_INTERFACE
     ip = None
     interfaces = psutil.net_if_addrs()
     
@@ -92,12 +92,18 @@ def network_check() -> int:
     if not ip:
         return status.FAILED
     
+    _ping_loss_tolerance = 3 # the amount of loss (out of 5) that can be tolerated
+
     __log__.debug(f'Trying PING with gateway address: {settings.APPConfigurations.GATEWAY}')
     sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = __ping__(settings.APPConfigurations.GATEWAY)
 
     if errors:
-        __log__.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}!')
+        __log__.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}')
         return status.FAILED
+    elif packet_loss:
+        if int(packet_loss) >= (_ping_loss_tolerance * 2) * 10:
+            __log__.warning(f'PING request to gateway {settings.APPConfigurations.GATEWAY} returned with packet loss higher than ping loss tolerance ({(_ping_loss_tolerance * 2) * 10}%)')
+            return status.FAILED
 
     return status.SUCCESS
 

@@ -21,23 +21,10 @@ from typing import Callable, Dict, Any
 import src.data.requests as requests
 
 # internal helpers, configurations
-from utils import log_config, map_sensor_payload
+from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
-
-# TODO: implement decorator
-def __from_queue__(queue:multiprocessing.Queue) -> dict | None:
-    item: dict | None = None
-
-    try:
-        item = queue.get(timeout=0.1)
-    except Exception as e:
-        __log__.error(f"Exception raised @ {os.getpid()} -> aioclient cannot get message from queue: {e}") if not queue.empty() else None
-    except KeyboardInterrupt or asyncio.CancelledError:
-        raise
-
-    return item
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
@@ -55,14 +42,18 @@ async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: ai
 
         if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}":
             data = map_sensor_payload(msg['payload'])
-            await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
+            stat, body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
 
-        if msg['topic'] == Topics.SENSOR_ALERT:
-            foo = 'foo' #TODO: implement sensor alert handling
+        if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
+            data = map_sink_payload(msg['payload'])
+            #return # wala lang sa kapoy paman
+            # TODO: api
+            #__log__.debug(f"Received sink node data: {msg['payload']}")
+            stat, body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
     # this is important to allow to run non-blocking message retrieval in the executor
@@ -82,16 +73,16 @@ async def start(queue: multiprocessing.Queue) -> None:
         __log__.error(f"Failed to create ClientSession object @ PID {os.getpid()} (aioclient child process): {e}")
         return
 
-    if loop:
-        __log__.info(f"AioHTTP SessionClient active @ PID {os.getpid()}")
+    if loop and client:
+        __log__.info(f"AioHTTP Session Client subprocess active @ PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    item = await loop.run_in_executor(pool, __from_queue__, queue) # non-blocking message retrieval
+                    item = await loop.run_in_executor(pool, get_from_queue, queue, __name__) # non-blocking message retrieval
 
                     # if an item is retrieved
-                    if client and item:
-                        __log__.debug(f"aioClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
+                    if item:
+                        __log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(__router__(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:

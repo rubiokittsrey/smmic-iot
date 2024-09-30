@@ -2,8 +2,9 @@ import logging as __logging__
 import settings
 import os
 import re
-from typing import Tuple, Optional, Dict, List
 import logging
+import multiprocessing
+from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
 def pretty_print(message, ):
@@ -48,6 +49,8 @@ def log_config(logger) -> __logging__.Logger:
     logger.addHandler(logs_handler) if settings.ENABLE_LOG_TO_FILE else None
 
     return logger
+
+__log__ = log_config(logging.getLogger(__name__))
 
 def set_logging_configuration():
     for logger in __LOGGER_LIST__:
@@ -107,6 +110,7 @@ def parse_err_ping(output) -> Tuple[str | None, ...]:
 # application modes
 class Modes:
     def dev(): #type: ignore
+        settings.dev_mode(True)
         settings.set_logging_level(logging.DEBUG)
         settings.enable_log_to_file(False)
         set_logging_configuration()
@@ -216,6 +220,11 @@ def map_sensor_payload(payload: str) -> Dict:
 
     # parse the data from the 3rd index of the payload split
     data : List[str] = outer_split[3].split("&")
+
+    # remove empty strings in the list
+    for i in range(data.count("")):
+        data.remove("")
+
     for value in data:
         # split the key and value of the value string
         x = value.split(":")
@@ -240,3 +249,56 @@ def map_sensor_payload(payload: str) -> Dict:
     #     ])
 
     return final
+
+# maps the payload from the sink data into a dictionary
+# assuming that the shape of the payload (as a string) is:
+# ------
+# device_id;
+# timestamp;
+# key:value&
+# key:value&
+# key:value&
+# key:value&
+# ..........
+# ------
+def map_sink_payload(payload: str) -> Dict:
+    final: Dict = {}
+
+    outer_split: List[str] = payload.split(';')
+    final.update({
+        'Sink_Node': outer_split[0],
+        'timestamp': outer_split[1]
+    })
+
+    data: List[str] = outer_split[2].split("&")
+
+    # remove empty strings in the list
+    for i in range(data.count("")):
+        data.remove("")
+
+    for value in data:
+        # split the key and value of the value string
+        x = value.split(":")
+        # check the value for a valid num type (int or float)
+        _num_check = is_num(x[1])
+
+        if not _num_check:
+            final.update({x[0]: x[1]})
+        else:
+            final.update({x[0]: _num_check(x[1])})
+
+    return final
+
+# helper function to retrieve messages from a queue
+# run in use loop.run_in_executor() method to run in non-blocking way
+def get_from_queue(queue: multiprocessing.Queue, mod: str) -> Dict | None:
+    msg: dict | None = None
+    try:
+        msg = queue.get(timeout=0.1)
+    except Exception as e:
+        if not queue.empty():
+            __log__.error(f"Unhandled exception raised @ PID {os.getpid()} ({mod}) while getting items from queue: {e}")
+        else:
+            pass
+
+    return msg
