@@ -69,6 +69,16 @@ class APPConfigurations:
     LOG_FILE_DIRECTORY : str = __dev_configs__["log_file_directory"]
     LOG_FILE_NAME : str = __dev_configs__["log_file_name"]
 
+    def __disable_irr__() -> bool | None:
+        val: bool | None = None
+        try:
+            val = settings_yaml["app_configurations"]["disable_irrigation"]
+        except KeyError:
+            pass
+        return val
+
+    DISABLE_IRRIGATION: bool | None = __disable_irr__()
+
 # api base url, enpoints
 class APIRoutes:
     BASE_URL : str = __var_from_env__("API_URL")
