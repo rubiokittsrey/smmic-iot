@@ -11,7 +11,11 @@ from settings import Topics, Broker
 
 async def run_test():
     client = mqtt.Client(client_id="irr_test1")
+<<<<<<< Updated upstream
     client.connect('192.168.1.9', 1883)
+=======
+    client.connect('localhost', 1883)
+>>>>>>> Stashed changes
     client.loop_start()
 
     k = 0
@@ -46,7 +50,7 @@ async def __signal_off__(client: mqtt.Client, device_id: str):
     try:
         msg = client.publish(
             topic=f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
-            payload=payload,
+            payload=payload,    
             qos=1
         )
         msg.wait_for_publish()

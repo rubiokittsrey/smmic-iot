@@ -1,0 +1,13 @@
+2024-10-01 13:11:52 - INFO - Starting in normal mode with INFO level logging and logging to file enabled
+2024-10-01 13:11:52 - INFO - Performing core system checks
+2024-10-01 13:11:56 - WARNING - Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port 1883
+2024-10-01 13:11:56 - INFO - Task Manager subprocess active @ PID 36836
+2024-10-01 13:11:56 - INFO - System monitor taskmanager coroutine active @ PID 36836
+2024-10-01 13:11:56 - INFO - AioHTTP Session Client subprocess active @ PID 36837
+2024-10-01 13:11:56 - INFO - Hardware module process active @ PID 36838
+2024-10-01 13:11:56 - ERROR - Unhandled exception raised @ PID 36838 (src.hardware.hardware): name 'irrigation' is not defined
+2024-10-01 13:11:56 - INFO - Callback client running and connected @ PID: 36811
+2024-10-01 13:12:06 - WARNING - Main function received KeyboardInterrupt or CancelledError, shutting down operations
+2024-10-01 13:12:06 - INFO - Performing shutdown on callback client @ PID: 36811
+2024-10-01 13:12:06 - WARNING - Callback client has been disconnected from broker: Normal disconnection
+2024-10-01 13:12:06 - WARNING - Shutting down

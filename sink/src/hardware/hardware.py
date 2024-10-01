@@ -12,7 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 # # internal helpers, configurations
 from utils import log_config, get_from_queue
 from settings import Topics, APPConfigurations, Broker
-import src.hardware.irrigation as irrigation
+if not APPConfigurations.DISABLE_IRRIGATION:
+    import src.hardware.irrigation as irrigation
 
 __log__ = log_config(logging.getLogger(__name__))
 
@@ -54,3 +55,5 @@ async def start(queue: multiprocessing.Queue) -> None:
                         asyncio.create_task(__delegator__(semaphore, task))
         except KeyboardInterrupt:
             raise
+        except Exception as e:
+            __log__.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")
