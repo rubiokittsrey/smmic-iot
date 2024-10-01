@@ -1,2 +1,1 @@
-import settings
-import utils
+from common import (settings, utils)
