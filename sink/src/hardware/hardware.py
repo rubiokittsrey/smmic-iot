@@ -9,7 +9,7 @@ import os
 from typing import Dict, Any, List, Callable
 from concurrent.futures import ThreadPoolExecutor
 
-# # internal helpers, configurations
+# internal helpers, configurations
 from utils import log_config, get_from_queue
 from settings import Topics, APPConfigurations, Broker
 if not APPConfigurations.DISABLE_IRRIGATION:
