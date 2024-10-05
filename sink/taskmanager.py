@@ -9,9 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Dict
 
 # internal helpers, configs
-from utils import log_config, set_priority, priority, get_from_queue
+from utils import log_config, set_priority, priority, get_from_queue, SensorAlerts
 from settings import APPConfigurations, Topics, Broker
-import src.data.sysmonitor as sysmonitor 
+from src.hardware.irrigation import remove_from_queue
+import src.data.sysmonitor as sysmonitor
 
 __log__ = log_config(logging.getLogger(__name__))
 
@@ -28,11 +29,11 @@ class __prioritized_task__:
 
 # for topic '/dev/test'
 # a simple dummy function made to test concurrent task management
-async def __dev_test_task__(msg: dict) -> None:
+async def __dev_test_task__(data: dict) -> None:
     # simulate task delay
     duration = random.randint(1, 10)
     await asyncio.sleep(duration)
-    __log__.debug(f"Task done @ PID {os.getpid()} (dev_test_task()): [timestamp: {msg['timestamp']}, topic: {msg['topic']}, payload: {msg['payload']}] after {duration} seconds")
+    __log__.debug(f"Task done @ PID {os.getpid()} (dev_test_task()): [timestamp: {data['timestamp']}, topic: {data['topic']}, payload: {data['payload']}] after {duration} seconds")
 
 # - description:
 # * delegates task to the proper process / function
@@ -40,35 +41,63 @@ async def __dev_test_task__(msg: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def __delegator__(semaphore: asyncio.Semaphore, msg: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
-    aio_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}'] # TODO: update the registered topics here
+async def __delegator__(semaphore: asyncio.Semaphore, data: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
+    # topics that need to be handled by the aiohttp client (http requests, api calls)
+    aio_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}']
+    # topics that need to be handled by the hardware module
     hardware_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.IRRIGATION}'] # TODO: implement this
     test_topics = ['/dev/test']
 
     async with semaphore:
 
-        if msg['topic'] in test_topics:
-            await __dev_test_task__(msg)
+        if data['topic'] in test_topics:
+            await __dev_test_task__(data)
 
-        if msg['topic'] in aio_queue_topics:
-            return __msg_to_queue__(aio_queue, msg)
+        if data['topic'] in aio_queue_topics:
+            __to_queue__(aio_queue, data)
                 # TODO: refactor to implement proper return value
 
-        if msg['topic'] in hardware_queue_topics:
-            return __msg_to_queue__(hardware_queue, msg)            
-
-# internal function to put messages to queue
-# abstract function that handles putting messages to queue primarily used by the delegator
-def __msg_to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
-    if not queue:
-        __log__.error(f"Invalid queue object {queue}! @ PID {os.getpid()} (taskmanager.__msg_to_queue__)")
-        return False
+        if data['topic'] in hardware_queue_topics:
+            __to_queue__(hardware_queue, data)
     
+        # sensor alert handling
+        if data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}':
+            alert_mapped = SensorAlerts.map_sensor_alert(data['payload'])
+            if not alert_mapped:
+                # TODO: handle error scenario
+                return
+            
+            #TODO: handle alert code == 0 (DISCONNECTED)
+            if alert_mapped['alert_code'] == SensorAlerts.CONNECTED:
+                pass
+            
+            if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
+                __se_disconnect_handler__(alert_mapped, hardware_queue)
+
+# args:
+# data - mapped alert data from mqtt message
+# h_queue - the hardware queue
+def __se_disconnect_handler__(data: Dict, h_queue: multiprocessing.Queue) -> bool:
+    # send a irrigation 'off' signal to the hardware queue
+    off_signal = {
+        'topic' : f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
+        'payload': f"{data['device_id']};{data['timestamp']};0"
+    }
+    try:
+        h_queue.put(off_signal)
+        return True
+    except Exception as e:
+        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} ({__name__})")
+        return False
+
+# internal helper function that handles putting messages to queue
+# primarily used by the delegator
+def __to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:    
     try:
         queue.put(msg)
         return True
     except Exception as e:
-        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} (taskmanager.__msg_to_queue)")
+        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} ({__name__})")
         return False
 
 # start the taskmanager process
@@ -114,8 +143,8 @@ async def start(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Que
                         if not _priority:
                             __log__.debug(f"Cannot assert priority of message from topic: {msg['topic']}, setting priority to moderate instead")
                             _priority = priority.MODERATE
-
-                        asyncio.create_task(__delegator__(semaphore=semaphore, msg=msg, aio_queue=aio_queue, hardware_queue=hardware_queue))
+                        
+                        asyncio.create_task(__delegator__(semaphore=semaphore, data=msg, aio_queue=aio_queue, hardware_queue=hardware_queue))
 
                     await asyncio.sleep(0.05)
                     

@@ -29,9 +29,11 @@ async def __delegator__(semaphore: asyncio.Semaphore, task: Dict) -> Any:
 
         if task['topic'] == f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}":
             task_payload = irrigation.map_irrigation_payload(task['payload'])
+
             if task_payload:
                 __IRRIGATION_QUEUE__.put(task_payload)
 
+# begin the hardware module process
 async def start(queue: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     # acquire the current running event loop

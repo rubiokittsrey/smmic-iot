@@ -21,35 +21,41 @@ from typing import Callable, Dict, Any
 import src.data.requests as requests
 
 # internal helpers, configurations
-from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue
+from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue, SensorAlerts
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
-async def __router__(semaphore: asyncio.Semaphore, msg: Dict, client_session: aiohttp.ClientSession) -> Any:
+async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: aiohttp.ClientSession) -> Any:
     # NOTE:
-    # ----- msg keys -> {priorty, topic, payload, timestamp}
+    # ----- data keys -> {priorty, topic, payload, timestamp}
+    # ----- (sensor alert) data keys -> {device_id, timestamp, alertCode}
+
+    req_body = Dict | None
 
     if not client_session:
         __log__.error(f"Error at aioclient.__router__(), client_session is empty!")
         return
 
     async with semaphore:
-        if msg['topic'] == '/dev/test':
+        if data['topic'] == '/dev/test':
             foo = 'foo'
 
-        if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}":
-            data = map_sensor_payload(msg['payload'])
-            stat, body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=data)
+        if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}":
+            req_body = map_sensor_payload(data['payload'])
+            stat, res_body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=req_body)
 
-        if msg['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
-            data = map_sink_payload(msg['payload'])
-            #return # wala lang sa kapoy paman
-            # TODO: api
-            #__log__.debug(f"Received sink node data: {msg['payload']}")
-            stat, body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=data)
+        if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
+            req_body = map_sink_payload(data['payload'])
+            stat, res_body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=req_body)
+
+        if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}":
+            req_body = SensorAlerts.map_sensor_alert(data['payload'])
+
+            if req_body:
+                stat, res_body = await requests.post_req(session=client_session, url=f"{APIRoutes.BASE_URL}{APIRoutes.SENSOR_ALERT}", data=req_body)
 
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:

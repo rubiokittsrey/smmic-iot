@@ -17,7 +17,7 @@ from settings import Channels
 __log__ = log_config(logging.getLogger(__name__))
 
 # the global irritaion queue dictionary
-__QUEUE__ : Dict[str, float] = {}
+__QUEUE__ : List[str] = []
 # specifies how long to wait for the 'off' signal from the sensors before turning removing the id from the __QUEUE__ list
 __OFF_SIGNAL_TOLERANCE__ : float = 60
 __CHANNEL__ = Channels.IRRIGATION
@@ -74,7 +74,6 @@ def map_irrigation_payload(payload: str) -> Dict | None:
 # IDEA: use last will and testament ---> https://www.hivemq.com/blog/mqtt-essentials-part-9-last-will-and-testament/
 async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue) -> None:
     global __QUEUE__
-    cache: List = [] # cache for quick access
 
     while True:
         # get 'task' item from the queue
@@ -82,29 +81,34 @@ async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Qu
 
         if task:
             _id = task['device_id']
-            _expire = time.time()
             if task['signal'] == 1:
-                if _id not in cache:
-                    __log__.debug(f"{__name__}.__watcher__() at PID {os.getpid()} received 'ON' signal from {_id}")
-                    cache.append(_id)
-                    __QUEUE__.update({_id:_expire})
+                if _id not in __QUEUE__:
+                    __QUEUE__.append(_id)
                 else:
-                    __log__.warning(f"{__name__} received signal 'ON' from {_id} but already in queue (received another 'ON' before 'OFF')")
+                    __log__.warning("%s received signal 'ON' from %s but already in queue (received another 'ON' before 'OFF')", __name__, _id)
             else:
                 try:
-                    del __QUEUE__[_id]
+                    __QUEUE__.remove(_id)
                 except KeyError:
-                    __log__.warning(f"{__name__} received signal 'OFF' from {_id} but id not in queue")
+                    __log__.warning("%s received signal 'OFF' from %s but id not in queue", __name__, _id)
 
         await asyncio.sleep(0.01)
 
+# sensor device disconnected panic function
+# removes the sensor device from the queue if it exists
+def remove_from_queue(device_id: str):
+    global __QUEUE__
+
+    if device_id in __QUEUE__:
+        __QUEUE__.remove(device_id)
+
 # turn on the input on the water pump channel
-def on(pin):
+def __on__(pin):
     GPIO.output(pin, GPIO.LOW)
 
 # turn off input on the water pump channel
 # not in use
-def off(pin):
+def __off__(pin):
     GPIO.output(pin, GPIO.HIGH)
 
 async def start(queue: multiprocessing.Queue) -> None:
@@ -126,11 +130,15 @@ async def start(queue: multiprocessing.Queue) -> None:
             while True:
                 if len(__QUEUE__) > 0:
                     # GPIO setup
-                    GPIO.setmode(GPIO.BCM)
-                    GPIO.setup(__CHANNEL__, GPIO.OUT)
+                    try:
+                        GPIO.setmode(GPIO.BCM)
+                        GPIO.setup(__CHANNEL__, GPIO.OUT)
+                    except Exception as e:
+                        __log__.warning(f"Unhandled exception raised at {__name__} module: {e}")
+
                     while len(__QUEUE__) > 0:
                         try:
-                            on(__CHANNEL__)
+                            __on__(__CHANNEL__)
                         except KeyboardInterrupt:
                             GPIO.cleanup()
                         except Exception as e:
@@ -139,7 +147,7 @@ async def start(queue: multiprocessing.Queue) -> None:
                     GPIO.cleanup()
                 else:
                     try:
-                        off(__CHANNEL__)
+                        __off__(__CHANNEL__)
                         GPIO.cleanup()
                     except Exception as e:
                         pass

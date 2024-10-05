@@ -11,26 +11,34 @@ import argparse
 import os
 import asyncio
 import multiprocessing
-import sys
-from typing import Any
-from concurrent.futures import ThreadPoolExecutor
+# import sys
+# from typing import Any
+# from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple, List
 
 # internal core modules
 from src.hardware import hardware, network
 from src.mqtt import service, client
-from src.data import aiohttpclient, sysmonitor
+from src.data import aiohttpclient
 import taskmanager
 
 # internal helpers, configs
-from utils import log_config, Modes, status, priority, set_priority
-from settings import Broker
+from utils import log_config, Modes, status  # priority, set_priority
+# from settings import Broker
 
 __log__ = log_config(logging.getLogger(__name__))
 
 # runs the task_manager asyncio event loop
 # this loop is important to allow concurrent task execution
-def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+
+
+def run_task_manager(
+        msg_queue: multiprocessing.Queue,
+        aio_queue: multiprocessing.Queue,
+        hardware_queue: multiprocessing.Queue,
+        sys_queue: multiprocessing.Queue
+        ) -> None:
+
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.new_event_loop()
@@ -42,7 +50,14 @@ def run_task_manager(msg_queue: multiprocessing.Queue, aio_queue: multiprocessin
     if loop:
         # the task manager module
         # handles the messages incoming from the queue
-        taskmanager_t = loop.create_task(taskmanager.start(msg_queue=msg_queue, aio_queue=aio_queue, hardware_queue=hardware_queue, sys_queue=sys_queue))
+        taskmanager_t = loop.create_task(
+            taskmanager.start(
+                msg_queue=msg_queue,
+                aio_queue=aio_queue,
+                hardware_queue=hardware_queue,
+                sys_queue=sys_queue
+                )
+            )
         # TODO: start he sysmonitor task here, handle cancellation properly
         try:
             loop.run_forever()

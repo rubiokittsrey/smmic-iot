@@ -83,9 +83,14 @@ class APPConfigurations:
 class APIRoutes:
     BASE_URL : str = __var_from_env__("API_URL")
     TEST_URL : str = __var_from_env__("API_TEST_URL")
-    SINK_DATA : str = __var_from_env__("SINK_DATA")
-    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
     HEADERS : str = settings_yaml["headers"]
+
+    # sink endpoints
+    SINK_DATA : str = __var_from_env__("SINK_DATA")
+
+    # sensor endpoints
+    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
+    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT")
 
 # api configurations
 class APIConfigs:

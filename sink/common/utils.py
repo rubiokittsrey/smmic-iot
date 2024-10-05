@@ -289,6 +289,51 @@ def map_sink_payload(payload: str) -> Dict:
 
     return final
 
+class SensorAlerts:
+    # connection
+    CONNECTED = 1
+    DISCONNECTED = 0
+
+    # temperature
+    HIGH_TEMP = 20
+    NORMAL_TEMP = 21
+    LOW_TEMP = 22
+
+    # humidity
+    HIGH_HUMIDITY = 20
+    NORMAL_HUMIDITY = 21
+    LOW_HUMIDITY = 22
+
+    # soil moisture
+    HIGH_SOIL_MOISTURE = 40
+    NORMAL_SOIL_MOISTURE = 40
+    LOW_SOIL_MOISTURE = 41
+
+    # maps the payload from the 'smmic/sensor/alert' topic
+    # assuming that the shape of the payload (as a string) is:
+    # ---------
+    # device_id;
+    # timestamp;
+    # alert_code
+    # ---------
+    def map_sensor_alert(payload: str) -> Dict | None:
+        final: Dict | None
+
+        outer_split: List[str] = payload.split(';')
+        final = {'device_id': outer_split[0], 'timestamp': outer_split[1]}
+
+        num_check = is_num(outer_split[2])
+
+        if not num_check:
+            __log__.warning(f"{__name__} failed num_check on alert payload: {payload} (non-num alert code)")
+            final = None
+        else:
+            final.update({
+                'alert_code': num_check(outer_split[2])
+            })
+
+        return final
+
 # helper function to retrieve messages from a queue
 # run in use loop.run_in_executor() method to run in non-blocking way
 def get_from_queue(queue: multiprocessing.Queue, mod: str) -> Dict | None:
