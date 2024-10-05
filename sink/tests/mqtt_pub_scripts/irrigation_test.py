@@ -10,10 +10,6 @@ from paho.mqtt import client as mqtt, enums
 from settings import Topics, Broker
 
 async def run_test():
-    client = mqtt.Client(client_id="irr_test1")
-    client.connect('192.168.1.100', 1883)
-    client.loop_start()
-
     k = 0
     loop = asyncio.get_event_loop()
 
@@ -23,6 +19,9 @@ async def run_test():
             device_id = token_urlsafe(8)
             timestamp = str(datetime.datetime.now())
             signal = 1
+
+            client = await init_and_conn(device_id, timestamp)
+
             payload = f"{device_id};{timestamp};{str(signal)}"
             try:
                 msg = client.publish(
@@ -36,8 +35,16 @@ async def run_test():
                 tasks.append(asyncio.create_task(__signal_off__(client, device_id)))
             except Exception as e:
                 print(f"err @ run_test: {e}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
         await asyncio.gather(*tasks)
+
+async def init_and_conn(device_id: str, timestamp) -> mqtt.Client:
+    client = mqtt.Client(client_id=device_id)
+    client.will_set('smmic/sensor/alert', f"{device_id};{timestamp};0")
+    client.connect('192.168.1.100', 1883)
+    client.loop_start()
+
+    return client
 
 async def __signal_off__(client: mqtt.Client, device_id: str):
     payload = f"{device_id};{str(datetime.datetime.now())};{0}"
