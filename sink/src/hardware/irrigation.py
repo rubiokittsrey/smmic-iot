@@ -47,24 +47,6 @@ def map_irrigation_payload(payload: str) -> Dict | None:
 
     return final
 
-# async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue) -> None:
-#     global __QUEUE__
-#     while True:
-#         task : Dict | None = get_from_queue(queue, __name__)
-
-#         if task:
-#             __log__.debug(f"{__name__}.__watcher__() at PID {os.getpid()} received task from queue")
-#             device_id = task['device_id']
-#             _expire = time.time() + 60 # 1 minute tolerance time before the system forcefully removes an item from the queue
-#             if task['signal'] == 1:
-#                 __QUEUE__.append(task['device_id']) if task['device_id'] not in __QUEUE__ else None
-#                 __log__.debug(f"{__name__} queue: {__QUEUE__}")
-#             else:
-#                 __QUEUE__.remove(task['device_id'])
-#                 __log__.debug(f"{__name__} queue: {__QUEUE__}")
-
-#         await asyncio.sleep(0.01)
-
 # the watcher function that retrieves items from the irrigation queue and 
 # stores the deviced id (from the item dict) into the __QUEUE__ global variable when
 # and removes the device ids on '0' signal
@@ -75,22 +57,31 @@ def map_irrigation_payload(payload: str) -> Dict | None:
 async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue) -> None:
     global __QUEUE__
 
+    # start loop
     while True:
-        # get 'task' item from the queue
-        task: Dict | None = get_from_queue(queue, __name__)
+        # retrieve irrigation task from queue
+        i_task: Dict | None = get_from_queue(queue, __name__)
 
-        if task:
-            _id = task['device_id']
-            if task['signal'] == 1:
-                if _id not in __QUEUE__:
-                    __QUEUE__.append(_id)
+        if i_task:
+            keys = list(i_task.keys())
+            device_id = i_task['device_id']
+
+            if 'signal' in keys:
+                if i_task['signal'] == 1 and device_id not in __QUEUE__:
+                    __QUEUE__.append(device_id)
                 else:
-                    __log__.warning("%s received signal 'ON' from %s but already in queue (received another 'ON' before 'OFF')", __name__, _id)
-            else:
-                try:
-                    __QUEUE__.remove(_id)
-                except KeyError:
-                    __log__.warning("%s received signal 'OFF' from %s but id not in queue", __name__, _id)
+                    __log__.warning("%s: signal 'ON' received from sensor %s but task already in __QUEUE__", __name__, device_id)
+
+                if i_task['signal'] == 0 and device_id in __QUEUE__:
+                    __QUEUE__.remove(device_id)
+                else:
+                    __log__.warning("%s: signal 'OFF' received from sensor %s but id not in __QUEUE__", __name__, device_id)
+
+            if 'disconnected' in keys:
+                if device_id in __QUEUE__:
+                    __QUEUE__.remove(device_id)
+                else:
+                    pass
 
         await asyncio.sleep(0.01)
 

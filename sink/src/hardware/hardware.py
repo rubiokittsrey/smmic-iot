@@ -26,10 +26,13 @@ def irrigation_callback(signal : int) -> None:
 
 async def __delegator__(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     async with semaphore:
+        task_keys : List = list(task.keys())
 
-        if task['topic'] == f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}":
+        if 'disconnected' in task_keys:
+            __IRRIGATION_QUEUE__.put(task)
+
+        if 'topic' in task_keys:
             task_payload = irrigation.map_irrigation_payload(task['payload'])
-
             if task_payload:
                 __IRRIGATION_QUEUE__.put(task_payload)
 
@@ -53,7 +56,6 @@ async def start(queue: multiprocessing.Queue) -> None:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, queue, __name__)
                     if task:
-                        __log__.debug(f"Module {__name__} at PID {os.getpid()} received message from queue (topic: {task['topic']})")
                         asyncio.create_task(__delegator__(semaphore, task))
         except KeyboardInterrupt:
             raise

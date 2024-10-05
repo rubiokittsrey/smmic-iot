@@ -203,8 +203,8 @@ async def shutdown_client() -> bool:
 
 # necessary handler class in order to include the usage of the Queue object in the message callback of the client
 class Handler:
-    def __init__(self, msg_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
-        self.__msg_queue__: multiprocessing.Queue = msg_queue
+    def __init__(self, task_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+        self.__task_queue__: multiprocessing.Queue = task_queue
         self.__sys_queue__: multiprocessing.Queue = sys_queue
     
     # the message callback function
@@ -226,7 +226,7 @@ class Handler:
             if _topic.startswith("$SYS"):
                 self.__sys_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
             else:
-                self.__msg_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+                self.__task_queue__.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
         except Exception as e:
             __log__.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
 

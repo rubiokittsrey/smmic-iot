@@ -33,7 +33,7 @@ __log__ = log_config(logging.getLogger(__name__))
 
 
 def run_task_manager(
-        msg_queue: multiprocessing.Queue,
+        task_queue: multiprocessing.Queue,
         aio_queue: multiprocessing.Queue,
         hardware_queue: multiprocessing.Queue,
         sys_queue: multiprocessing.Queue
@@ -52,7 +52,7 @@ def run_task_manager(
         # handles the messages incoming from the queue
         taskmanager_t = loop.create_task(
             taskmanager.start(
-                msg_queue=msg_queue,
+                task_queue=task_queue,
                 aio_queue=aio_queue,
                 hardware_queue=hardware_queue,
                 sys_queue=sys_queue
@@ -143,13 +143,13 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     __log__.debug(f"Executing smmic.main() @ PID {os.getpid()}")
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
-    msg_queue = multiprocessing.Queue()
+    task_queue = multiprocessing.Queue()
     aio_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
 
     tsk_mngr_kwargs = {
-        'msg_queue': msg_queue,
+        'task_queue': task_queue,
         'aio_queue': aio_queue,
         'hardware_queue': hardware_queue,
         'sys_queue': sys_queue
@@ -174,7 +174,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
-        handler = client.Handler(msg_queue=msg_queue, sys_queue=sys_queue)
+        handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
         callback_client_task = asyncio.create_task(client.start_client(handler.msg_callback))
 
         # ensures that the callback_client task is done

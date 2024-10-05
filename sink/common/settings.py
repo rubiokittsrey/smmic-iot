@@ -125,7 +125,7 @@ class Topics:
     SYS_MESSAGES_SENT : str = __var_from_env__("BROKER_MESSAGES_SENT")
     SYS_SUB_COUNT : str = __var_from_env__("BROKER_SUBSCRIPTIONS_COUNT")
     IRRIGATION : str = __var_from_env__("IRRIGATION_TOPIC")
-    
+
     def get_topics() -> Tuple[List[str], List[str]]:
         _topics: List[str] = []
         _sys_topics: List[str] = []

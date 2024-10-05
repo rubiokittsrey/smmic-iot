@@ -72,20 +72,20 @@ async def __delegator__(semaphore: asyncio.Semaphore, data: Dict, aio_queue: mul
                 pass
             
             if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                __se_disconnect_handler__(alert_mapped, hardware_queue)
+                __on_sensor_disconnect__(alert_mapped, hardware_queue)
 
 # args:
 # data - mapped alert data from mqtt message
-# h_queue - the hardware queue
-def __se_disconnect_handler__(data: Dict, h_queue: multiprocessing.Queue) -> bool:
-    # send a irrigation 'off' signal to the hardware queue
-    off_signal = {
-        'topic' : f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
-        'payload': f"{data['device_id']};{data['timestamp']};0"
+# hardware_queue - the hardware queue
+def __on_sensor_disconnect__(data: Dict, hardware_queue: multiprocessing.Queue) -> bool:
+    # send an irrigation 'off' signal to the hardware queue
+    se_disconnect = {
+        'device_id': data['device_id'],
+        'disconnected': True
     }
     try:
-        h_queue.put(off_signal)
-        return True
+        hardware_queue.put(se_disconnect)
+        return True 
     except Exception as e:
         __log__.error(f"Failed to put message to queue @ PID {os.getpid()} ({__name__})")
         return False
@@ -107,7 +107,7 @@ def __to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
 #
-async def start(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+async def start(task_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
@@ -117,7 +117,7 @@ async def start(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Que
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.get_running_loop()
-    except Exception as e:
+    except RuntimeError as e:
         __log__.error(f"Failed to get running event loop @ PID {os.getpid()} taskmanager child process: {e}")
         return
 
@@ -126,29 +126,29 @@ async def start(msg_queue: multiprocessing.Queue, aio_queue: multiprocessing.Que
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             # start the sysmonitor coroutine
-            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, msg_queue=msg_queue))
+            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, msg_queue=task_queue))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    msg = await loop.run_in_executor(pool, get_from_queue, msg_queue, __name__)
+                    task = await loop.run_in_executor(pool, get_from_queue, task_queue, __name__)
 
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
-                    if msg:
-                        __log__.debug(f"Module {__name__} at PID {os.getpid()} received message from queue (topic: {msg['topic']})")
+                    if task:
+                        __log__.debug(f"Module {__name__} at PID {os.getpid()} received item from queue: {task}")
 
                         # assign a priority for the task
-                        _priority = set_priority(msg['topic'])
+                        priority = set_priority(task['topic'])
+                        # if not priority set to moderate
+                        if not priority:
+                            __log__.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
+                            priority = priority.MODERATE
 
-                        if not _priority:
-                            __log__.debug(f"Cannot assert priority of message from topic: {msg['topic']}, setting priority to moderate instead")
-                            _priority = priority.MODERATE
-                        
-                        asyncio.create_task(__delegator__(semaphore=semaphore, data=msg, aio_queue=aio_queue, hardware_queue=hardware_queue))
+                        asyncio.create_task(__delegator__(semaphore=semaphore, data=task, aio_queue=aio_queue, hardware_queue=hardware_queue))
 
                     await asyncio.sleep(0.05)
                     
-        except KeyboardInterrupt or asyncio.CancelledError:
+        except (KeyboardInterrupt, asyncio.CancelledError):
             sysmonitor_t.cancel()
             try:
                 loop.run_until_complete(sysmonitor_t)
