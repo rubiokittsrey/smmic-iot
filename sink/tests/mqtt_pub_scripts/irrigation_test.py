@@ -5,6 +5,7 @@ import asyncio
 from secrets import token_urlsafe
 from random import randint
 from paho.mqtt import client as mqtt, enums
+from typing import List
 
 # internal
 from settings import Topics, Broker
@@ -14,29 +15,37 @@ async def run_test():
     loop = asyncio.get_event_loop()
 
     if loop:
-        tasks = []
-        for i in range(2):
-            device_id = token_urlsafe(8)
-            timestamp = str(datetime.datetime.now())
-            signal = 1
+        tasks: List[asyncio.Task] = []
+        for i in range(5):
+            tasks.append(asyncio.create_task(abstracted_pub()))
 
-            client = await init_and_conn(device_id, timestamp)
+        try:
+            await asyncio.gather(*tasks)
+        except KeyboardInterrupt:
+            for t in tasks:
+                t.cancel()
 
-            payload = f"{device_id};{timestamp};{str(signal)}"
-            try:
-                msg = client.publish(
-                    topic=f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
-                    payload=payload,
-                    qos=1
-                )
-                msg.wait_for_publish()
-                if msg.is_published():
-                    print(f"signal on sent: {payload}")
-                tasks.append(asyncio.create_task(__signal_off__(client, device_id)))
-            except Exception as e:
-                print(f"err @ run_test: {e}")
-            await asyncio.sleep(5)
-        await asyncio.gather(*tasks)
+async def abstracted_pub():
+    device_id = token_urlsafe(8)
+    timestamp = str(datetime.datetime.now())
+    signal = 1
+
+    client = await init_and_conn(device_id, timestamp)
+
+    payload = f"{device_id};{timestamp};{str(signal)}"
+    try:
+        msg = client.publish(
+            topic=f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
+            payload=payload,
+            qos=1
+        )
+        msg.wait_for_publish()
+        if msg.is_published():
+            print(f"signal on sent: {payload}")
+        await __signal_off__(client, device_id)
+    except Exception as e:
+        print(f"err @ run_test: {e}")
+    await asyncio.sleep(3)
 
 async def init_and_conn(device_id: str, timestamp) -> mqtt.Client:
     client = mqtt.Client(client_id=device_id)

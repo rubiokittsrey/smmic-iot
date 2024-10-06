@@ -9,7 +9,7 @@ from settings import Topics, Broker
 
 def mqtt_test():
     client = mqtt.Client(client_id="test_pub1")
-    client.connect('192.168.1.25', 1883)
+    client.connect('192.168.1.100', 1883)
     client.loop_start()
 
     k = 0
