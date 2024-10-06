@@ -66,6 +66,7 @@ def __req__(func: Callable) -> Any:
                     __log__.error((f"({count}) " if count > 1 else "") + e + " ")
                     _logged.append(e)
 
+        # if err length == retries, request failed
         if len(err) == retries:
             __log__.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
         else:

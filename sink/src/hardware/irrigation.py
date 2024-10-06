@@ -67,15 +67,18 @@ async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Qu
             device_id = i_task['device_id']
 
             if 'signal' in keys:
-                if i_task['signal'] == 1 and device_id not in __QUEUE__:
-                    __QUEUE__.append(device_id)
-                else:
-                    __log__.warning("%s: signal 'ON' received from sensor %s but task already in __QUEUE__", __name__, device_id)
 
-                if i_task['signal'] == 0 and device_id in __QUEUE__:
-                    __QUEUE__.remove(device_id)
-                else:
-                    __log__.warning("%s: signal 'OFF' received from sensor %s but id not in __QUEUE__", __name__, device_id)
+                if i_task['signal'] == 1:
+                    if device_id in __QUEUE__:
+                        __log__.warning("%s: signal 'ON' received from sensor %s but task already in __QUEUE__", __name__, device_id)
+                    else:
+                        __QUEUE__.append(device_id)
+                
+                if i_task['signal'] == 0:
+                    if device_id not in __QUEUE__:
+                        __log__.warning("%s: signal 'OFF' received from sensor %s but id not in __QUEUE__", __name__, device_id)
+                    else:
+                        __QUEUE__.remove(device_id)
 
             if 'disconnected' in keys:
                 if device_id in __QUEUE__:

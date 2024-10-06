@@ -197,6 +197,9 @@ def is_num(var) -> type[float | int] | None:
         except ValueError:
             pass
 
+    if _type is None:
+        __log__.warning(f"Failed num_check at {__name__}: {var}")
+
     return _type
 
 # maps the payload from the device reading into a dictionary
@@ -329,7 +332,6 @@ class SensorAlerts:
         num_check = is_num(outer_split[2])
 
         if not num_check:
-            __log__.warning(f"{__name__} failed num_check on alert payload: {payload} (non-num alert code)")
             final = None
         else:
             final.update({
@@ -339,15 +341,22 @@ class SensorAlerts:
         return final
 
 # helper function to retrieve messages from a queue
-# run in use loop.run_in_executor() method to run in non-blocking way
-def get_from_queue(queue: multiprocessing.Queue, mod: str) -> Dict | None:
+# run using loop.run_in_executor() method to run in non-blocking way
+def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
     msg: dict | None = None
     try:
         msg = queue.get(timeout=0.1)
     except Exception as e:
         if not queue.empty():
-            __log__.error(f"Unhandled exception raised @ PID {os.getpid()} ({mod}) while getting items from queue: {e}")
+            __log__.error(f"Unhandled exception raised while getting items from queue ({name} at PID {os.getpid()}): {str(e)}")
         else:
             pass
 
     return msg
+
+# helper class with functions for handling common exceptions
+class ExceptionsHandler:
+
+    class event_loop:
+        def unhandled(self, name: str, pid: int, err: str):
+            __log__.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")

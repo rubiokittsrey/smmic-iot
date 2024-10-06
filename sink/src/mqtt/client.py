@@ -178,7 +178,7 @@ async def shutdown_client() -> bool:
         __log__.error(f"Cannot disconnect or shutdown a callback client that does not exist!")
         return False
     
-    __log__.info(f"Performing shutdown on callback client @ PID: {os.getpid()}")
+    __log__.info(f"Shutting down SMMIC callback client at PID: {os.getpid()}")
 
     if __CLIENT_STAT__ == status.CONNECTED:
         try:

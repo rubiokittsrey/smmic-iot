@@ -14,16 +14,16 @@ import multiprocessing
 # import sys
 # from typing import Any
 # from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 
 # internal core modules
+import taskmanager
 from src.hardware import hardware, network
 from src.mqtt import service, client
 from src.data import aiohttpclient
-import taskmanager
 
 # internal helpers, configs
-from utils import log_config, Modes, status  # priority, set_priority
+from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
 # from settings import Broker
 
 __log__ = log_config(logging.getLogger(__name__))
@@ -33,6 +33,7 @@ __log__ = log_config(logging.getLogger(__name__))
 
 def run_task_manager(
         task_queue: multiprocessing.Queue,
+        c_queue: multiprocessing.Queue,
         aio_queue: multiprocessing.Queue,
         hardware_queue: multiprocessing.Queue,
         sys_queue: multiprocessing.Queue
@@ -52,16 +53,17 @@ def run_task_manager(
         taskmanager_t = loop.create_task(
             taskmanager.start(
                 task_queue=task_queue,
+                c_queue=c_queue,
                 aio_queue=aio_queue,
                 hardware_queue=hardware_queue,
                 sys_queue=sys_queue
                 )
             )
-        # TODO: start he sysmonitor task here, handle cancellation properly
+        
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Closing the taskmanager loop and exiting process @ PID {os.getpid()}")
+            __log__.debug(f"Closing the taskmanager loop and exiting process at PID {os.getpid()}")
             taskmanager_t.cancel()
             # await cleanup
             try:
@@ -121,7 +123,7 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Closing the harware module process and exiting @ PID {os.getpid()}")
+            __log__.debug(f"Closing the harware module process and exiting at PID {os.getpid()}")
             hardware_t.cancel()
 
             try:
@@ -136,33 +138,99 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
 
     #TODO: implement
 
+# abstract function to run sub processes
+def run_sub_p(*args, **kwargs):
+    pretty_alias: str
+    sub_p: Callable
+
+    try:
+        sub_p = kwargs.pop('sub_proc')
+    except KeyError:
+        __log__.error(f"Failed to run sub process: kwargs missing 'sub_proc' key ({__name__} at {os.getpid()})")
+        raise
+
+    try:
+        pretty_alias = kwargs.pop('pretty_alias')
+    except KeyError:
+        __log__.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
+        pretty_alias = sub_p.__name__
+
+    loop = None
+    try:
+        loop = asyncio.new_event_loop()
+    except Exception as e:
+        __log__.error(f"Failed to start event loop")
+
+    if loop:
+        proc_t = loop.create_task(sub_p(**kwargs))
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            __log__.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
+            proc_t.cancel()
+
+            # allow cleanup
+            try:
+                loop.run_until_complete(proc_t)
+            except asyncio.CancelledError:
+                pass
+            raise
+
+        except Exception as e:
+            __log__.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
+        finally:
+            loop.close()
+
 # the main function of this operation
 # and the parent process of the task manager process
 async def main(loop: asyncio.AbstractEventLoop) -> None:
-    __log__.debug("Running %s at PID %d", __name__, os.getpid())
+    __log__.info(f"SMMIC running at PID {os.getpid()}")
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
+    task_consume_queue = multiprocessing.Queue()
     aio_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
 
-    tsk_mngr_kwargs = {
+    task_manager_kwargs = {
+        'pretty_alias': taskmanager.__PRETTY_ALIAS__,
+        'sub_proc': taskmanager.start,
         'task_queue': task_queue,
+        'c_queue': task_consume_queue,
         'aio_queue': aio_queue,
         'hardware_queue': hardware_queue,
         'sys_queue': sys_queue
     }
 
+    aio_client_kwargs = {
+        'pretty_alias': aiohttpclient.__PRETTY_ALIAS__,
+        'sub_proc': aiohttpclient.start,
+        'c_queue': aio_queue,
+        'tm_queue': task_consume_queue
+    }
+
+    hardware_kwargs = {
+        'pretty_alias': hardware.__PRETTY_ALIAS__,
+        'sub_proc': hardware.start,
+        'c_queue': hardware_queue,
+        'tm_queue': task_consume_queue
+    }
+
+    kwargs_list = [task_manager_kwargs, aio_client_kwargs, hardware_kwargs]
+
     try:
+
         # first, spawn and run the task manager process
         processes : List[multiprocessing.Process] = []
+        for p_kwargs in kwargs_list:
+            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs))
         # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
-        processes.append(multiprocessing.Process(target=run_task_manager, kwargs=tsk_mngr_kwargs))
+        # processes.append(multiprocessing.Process(target=run_task_manager, kwargs=task_manager_kwargs))
         # the aiohttp client process handles requests to and from the api
-        processes.append(multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue}))
+        # processes.append(multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue}))
         # the hardware module process handles hardware tasks received from the mqtt network
-        processes.append(multiprocessing.Process(target=run_hardware_p, kwargs={'queue': hardware_queue}))
+        # processes.append(multiprocessing.Process(target=run_hardware_p, kwargs={'queue': hardware_queue}))
 
         for proc in processes:
             proc.start()
@@ -176,22 +244,18 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
         callback_client_task = asyncio.create_task(client.start_client(handler.msg_callback))
 
-        # ensures that the callback_client task is done
-        # handle KeyboardInterrupt for graceful shutdown
+        # shutdown and cleanup
         try:
             await asyncio.gather(callback_client_task)
         except asyncio.CancelledError:
             __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
-            # terminate the task_manager process
             for proc in processes:
                 proc.terminate()
 
-            # make sure the processes are joined
             for proc in processes:
                 proc.join()
 
-            # disconnect and shutdown the callback client loop
             await asyncio.gather(client.shutdown_client(), callback_client_task)
 
             raise
@@ -216,7 +280,7 @@ def run(core_status: status, api_status: status):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     except Exception as e:
-        __log__.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (main process): {str(e)}")
+        ExceptionsHandler.event_loop.unhandled(__name__, os.getpid(), str(e))
         os._exit(0)
 
     # if loop event loop is present, run main()
@@ -234,7 +298,7 @@ def run(core_status: status, api_status: status):
         except Exception as e:
             __log__.error(f"Failed to run main loop: {str(e)}")
         finally:
-            __log__.debug(f"Closing main() loop @ PID {os.getpid()}")
+            __log__.debug(f"Closing main() loop at PID {os.getpid()}")
             loop.close()
     else:
         return
@@ -280,7 +344,7 @@ def sys_check() -> Tuple[int, int | None]:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         except Exception as e:
-            __log__.error("Failed to get new event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
+            ExceptionsHandler.event_loop.unhandled(__name__, os.getpid(), e)
             os._exit(0)
 
         if loop:

@@ -16,6 +16,8 @@ import src.data.sysmonitor as sysmonitor
 
 __log__ = log_config(logging.getLogger(__name__))
 
+__PRETTY_ALIAS__ = "Task Manager"
+
 # unimplemented priority class for tasks
 # not sure how to implement this yet
 # TODO: look into task prioritization
@@ -87,7 +89,7 @@ def __on_sensor_disconnect__(data: Dict, hardware_queue: multiprocessing.Queue) 
         hardware_queue.put(se_disconnect)
         return True 
     except Exception as e:
-        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} ({__name__})")
+        __log__.error(f"Failed to put message to queue at PID {os.getpid()} ({__name__}): {str(e)}")
         return False
 
 # internal helper function that handles putting messages to queue
@@ -97,7 +99,7 @@ def __to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
         queue.put(msg)
         return True
     except Exception as e:
-        __log__.error(f"Failed to put message to queue @ PID {os.getpid()} ({__name__})")
+        __log__.error(f"Failed to put message to queue at PID {os.getpid()} ({__name__}): {str(e)}")
         return False
 
 # start the taskmanager process
@@ -107,7 +109,13 @@ def __to_queue__(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
 #
-async def start(task_queue: multiprocessing.Queue, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+async def start(
+        task_queue: multiprocessing.Queue,
+        c_queue: multiprocessing.Queue,
+        aio_queue: multiprocessing.Queue,
+        hardware_queue: multiprocessing.Queue,
+        sys_queue: multiprocessing.Queue
+        ) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
@@ -118,11 +126,11 @@ async def start(task_queue: multiprocessing.Queue, aio_queue: multiprocessing.Qu
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError as e:
-        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} taskmanager child process: {e}")
+        __log__.error(f"{__PRETTY_ALIAS__} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
     if loop:
-        __log__.info(f"Task Manager subprocess active @ PID {os.getpid()}")
+        __log__.info(f"{__PRETTY_ALIAS__} subprocess active at PID {os.getpid()}")
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             # start the sysmonitor coroutine
@@ -135,7 +143,7 @@ async def start(task_queue: multiprocessing.Queue, aio_queue: multiprocessing.Qu
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if task:
-                        __log__.debug(f"Module {__name__} at PID {os.getpid()} received item from queue: {task}")
+                        __log__.debug(f"{__PRETTY_ALIAS__} received item from queue: {task}")
 
                         # assign a priority for the task
                         _p = set_priority(task['topic'])

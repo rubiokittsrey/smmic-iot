@@ -139,7 +139,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 # start this module / coroutine
 async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Queue) -> None:
     # verify existence of event loop
-    loop: asyncio.AbstractEventLoop | None = None
+    loop = None
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
@@ -147,7 +147,7 @@ async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Que
         return
 
     if loop:
-        __log__.info(f"System monitor taskmanager coroutine active @ PID {os.getpid()}")
+        __log__.info(f"{__name__} coroutine active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
             # to do handle task cancellation of this

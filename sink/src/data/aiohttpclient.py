@@ -26,6 +26,8 @@ from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
 
+__PRETTY_ALIAS__ = "AIO HTTP Client"
+
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
 async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: aiohttp.ClientSession) -> Any:
@@ -69,14 +71,14 @@ async def api_check() -> status:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error("Failed to get running event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
+        __log__.error(f"Failed to get running event loop ({__name__} at PID {os.getpid()}): {str(e)}")
 
     # acquire an aiohttp.ClientSession object to work with requests module aiohttp framework
     client: aiohttp.ClientSession | None = None
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        __log__.error("Failed to create ClientSession object (%s at PID %d): %s", __name__, os.getpid(), str(e))
+        __log__.error(f"Failed to create client session object ({__name__} at {os.getpid(())}): {str(e)}")
         return status.FAILED
     
     if loop and client:
@@ -95,7 +97,7 @@ async def api_check() -> status:
     return result
 
 # TODO: documentation
-async def start(queue: multiprocessing.Queue) -> None:
+async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
@@ -104,7 +106,7 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error("Failed to get running event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
+        __log__.error(f"{__PRETTY_ALIAS__} failed to get running event loop: {str(e)}")
         return
     
     # acquire a aiohttp.ClientSession object
@@ -113,19 +115,19 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        __log__.error("Failed to create ClientSession object (%s at PID %d): %s", __name__, os.getpid(), str(e))
+        __log__.error(f"{__PRETTY_ALIAS__} failed to create client session object: {str(e)}")
         return
 
     if loop and client:
-        __log__.info("AioHTTP ClientSession subprocess active at PID %d", os.getpid())
+        __log__.info(f"{__PRETTY_ALIAS__} subprocess active at PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    item = await loop.run_in_executor(pool, get_from_queue, queue, __name__) # non-blocking message retrieval
+                    item = await loop.run_in_executor(pool, get_from_queue, c_queue, __name__) # non-blocking message retrieval
 
                     # if an item is retrieved
                     if item:
-                        __log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
+                        #__log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(__router__(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:
