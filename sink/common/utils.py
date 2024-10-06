@@ -22,15 +22,19 @@ __CONSOLE_HANDLER__ = __logging__.StreamHandler()
 __LOG_FORMATTER__ = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 class status:
+    # checks
+    UNVERIFIED = 100
     SUCCESS = 200
-    ERROR = 400
     WARNING = 300
+    ERROR = 400
     CRITICAL = 500
-    ACTIVE = SUCCESS
-    INACTIVE = WARNING
+
+    # states
+    ACTIVE = 250
+    INACTIVE = 350
+    CONNECTED = 1
+    DISCONNECTED = 0
     FAILED = ERROR
-    CONNECTED = ACTIVE
-    DISCONNECTED = INACTIVE
 
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler

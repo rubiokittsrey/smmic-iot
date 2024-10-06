@@ -84,6 +84,7 @@ class APIRoutes:
     BASE_URL : str = __var_from_env__("API_URL")
     TEST_URL : str = __var_from_env__("API_TEST_URL")
     HEADERS : str = settings_yaml["headers"]
+    HEALTH : str = __var_from_env__("HEALTH_CHECK_URL")
 
     # sink endpoints
     SINK_DATA : str = __var_from_env__("SINK_DATA")

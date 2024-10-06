@@ -3,7 +3,6 @@
 # TODO: documentation
 
 # third-party
-import time
 import subprocess
 import multiprocessing
 import asyncio
@@ -30,7 +29,7 @@ __MESSAGES_RECEIVED__ : int = 0
 
 __, __sys_topics__ = Topics.get_topics()
 
-async def __update_values__(topic : str, value : int, semaphore : asyncio.Semaphore) -> None:
+async def __update_values__(topic : str, value : int) -> None:
     global __CONNECTED_CLIENTS__, __CLIENTS_TOTAL__, __SUB_COUNT__, __BYTES_SENT__, __BYTES_RECEIVED__, __MESSAGES_SENT__, __MESSAGES_RECEIVED__
 
     if topic == Topics.SYS_CLIENTS_CONNECTED:
@@ -50,6 +49,8 @@ async def __update_values__(topic : str, value : int, semaphore : asyncio.Semaph
     else:
         __log__.warning(f"Cannot assert $SYS topic of value @ sysmonitor: {topic}")
 
+    return
+
 def __from_sys_queue__(queue: multiprocessing.Queue) -> dict | None:
     msg: dict | None = None
 
@@ -67,28 +68,31 @@ def __from_sys_queue__(queue: multiprocessing.Queue) -> dict | None:
 async def __put_to_queue__(queue: multiprocessing.Queue):
     msg: dict | None = {}
 
-    while True:
-        await asyncio.sleep(300) # execute every 5 minutes
-        _d = [
-                f'connected_clients:{__CONNECTED_CLIENTS__}',
-                f'total_clients:{__CLIENTS_TOTAL__}',
-                f'sub_count:{__SUB_COUNT__}',
-                f'bytes_sent:{__BYTES_SENT__}',
-                f'bytes_received:{__BYTES_RECEIVED__}',
-                f'messages_sent:{__MESSAGES_SENT__}',
-                f'messages_received:{__MESSAGES_RECEIVED__}',
-                f'battery_level:{00}'
-            ]
-        data : str = ''
-        for d in _d:
-            data = data + f'&{d}'
-        payload = f'{APPConfigurations.CLIENT_ID};{datetime.now()};{data}'
-        msg.update({'topic':'smmic/sink/data', 'payload':f'{payload}'})
-    
-        try:
-            queue.put(msg)
-        except Exception as e:
-            __log__.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
+    try:
+        while True:
+            await asyncio.sleep(300) # execute every 5 minutes
+            _d = [
+                    f'connected_clients:{__CONNECTED_CLIENTS__}',
+                    f'total_clients:{__CLIENTS_TOTAL__}',
+                    f'sub_count:{__SUB_COUNT__}',
+                    f'bytes_sent:{__BYTES_SENT__}',
+                    f'bytes_received:{__BYTES_RECEIVED__}',
+                    f'messages_sent:{__MESSAGES_SENT__}',
+                    f'messages_received:{__MESSAGES_RECEIVED__}',
+                    f'battery_level:{00}'
+                ]
+            data : str = ''
+            for d in _d:
+                data = data + f'&{d}'
+            payload = f'{APPConfigurations.CLIENT_ID};{datetime.now()};{data}'
+            msg.update({'topic':'smmic/sink/data', 'payload':f'{payload}'})
+
+            try:
+                queue.put(msg)
+            except Exception as e:
+                __log__.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        return
 
 # returns a list of memory usage data (in kilobytes) of the device
 # 'free' docs: https://www.turing.com/kb/how-to-use-the-linux-free-command
@@ -134,8 +138,6 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 
 # start this module / coroutine
 async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Queue) -> None:
-    semaphore = asyncio.Semaphore(2)
-
     # verify existence of event loop
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -158,7 +160,7 @@ async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Que
                         msg = await loop.run_in_executor(pool, __from_sys_queue__, sys_queue)
                         if msg:
                             #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
-                            asyncio.create_task(__update_values__(topic=msg['topic'], value=int(msg['payload']), semaphore=semaphore))
+                            asyncio.create_task(__update_values__(topic=msg['topic'], value=int(msg['payload'])))
 
                         await asyncio.sleep(0.05)
 

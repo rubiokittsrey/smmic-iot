@@ -16,7 +16,6 @@ def mqtt_status_check() -> int:
                 stderr=subprocess.PIPE, text=True
             )
         if "Active: active (running)" in result.stdout:
-            __log__.debug(f'MOSQUITTO Broker status: active')
             # TODO: implement checking which port mosquitto.service is listening to
             __log__.warning(f'Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port {settings.Broker.PORT}')
             return status.ACTIVE

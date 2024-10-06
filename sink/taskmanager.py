@@ -138,11 +138,11 @@ async def start(task_queue: multiprocessing.Queue, aio_queue: multiprocessing.Qu
                         __log__.debug(f"Module {__name__} at PID {os.getpid()} received item from queue: {task}")
 
                         # assign a priority for the task
-                        priority = set_priority(task['topic'])
+                        _p = set_priority(task['topic'])
                         # if not priority set to moderate
-                        if not priority:
+                        if not _p:
                             __log__.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
-                            priority = priority.MODERATE
+                            _p = priority.MODERATE
 
                         asyncio.create_task(__delegator__(semaphore=semaphore, data=task, aio_queue=aio_queue, hardware_queue=hardware_queue))
 

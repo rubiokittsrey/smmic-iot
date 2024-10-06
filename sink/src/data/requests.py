@@ -80,17 +80,16 @@ def __req__(func: Callable) -> Any:
 async def get_req(
     session: aiohttp.ClientSession,
     url: str,
-    data: Dict[str, Any] | None,
+    data: Dict[str, Any] | None = None,
     retries: int | None = None,
     timeout: int = APPConfigurations.NETWORK_TIMEOUT) -> Any:
 
     async with session.get(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        res_json: Any
-        if response:
-            res_json = await response.json()
-        #__log__.debug(f"Get request successful: {response.status} -> {await response.json()}")
-        return res_json
+        #__log__.debug(f"Post request successful: {response.status} -> {await response.json()}")
+        res_stat = response.status
+        res_body = await response.json()
+        return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
 @__req__

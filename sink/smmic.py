@@ -31,7 +31,6 @@ __log__ = log_config(logging.getLogger(__name__))
 # runs the task_manager asyncio event loop
 # this loop is important to allow concurrent task execution
 
-
 def run_task_manager(
         task_queue: multiprocessing.Queue,
         aio_queue: multiprocessing.Queue,
@@ -114,7 +113,7 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
     except Exception as e:
         __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
-    
+
     if loop:
         # the hardware module process
         # handles all requests coming to and from the api
@@ -140,7 +139,7 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
 # the main function of this operation
 # and the parent process of the task manager process
 async def main(loop: asyncio.AbstractEventLoop) -> None:
-    __log__.debug(f"Executing smmic.main() @ PID {os.getpid()}")
+    __log__.debug("Running %s at PID %d", __name__, os.getpid())
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
@@ -187,7 +186,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
             # terminate the task_manager process
             for proc in processes:
                 proc.terminate()
-            
+
             # make sure the processes are joined
             for proc in processes:
                 proc.join()
@@ -200,13 +199,18 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # keep the main thread alive
         while True:
             await asyncio.sleep(0.05)
-        
+
     except Exception as e:
         __log__.error(f"Parent process called exception error: {str(e)}")
         os._exit(0)
 
 # create a new event loop and then run the main process within that loop
-def run():
+def run(core_status: status, api_status: status):
+    if api_status == status.DISCONNECTED:
+            __log__.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
+    elif api_status == status.FAILED:
+        __log__.warning("API Health check returned with failure, proceeding with API fail protocols")
+
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.new_event_loop()
@@ -257,19 +261,33 @@ def sys_check() -> Tuple[int, int | None]:
 
     if net_check == status.SUCCESS:
         __log__.debug(f'Network check successful, checking mosquitto service status')
-        
+
         # check mosquitto service status
         # if mosquitto service check returns status.SUCCESS, proceed with api connection check
         mqtt_status = service.mqtt_status_check()
         if mqtt_status == status.ACTIVE:
-            # TODO: implement api connection function
-            # TODO: create no connection to api system protocols
+            __log__.debug('MOSQUITTO Broker status: active')
             core_status = status.SUCCESS
-            api_status = status.SUCCESS
         else:
             core_status = status.FAILED
+
+        # check api connection and health
+        # if the check fails, implement no api connection protocol
+        # TODO: create no connection to api system protocols
+
+        loop: asyncio.AbstractEventLoop | None = None
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        except Exception as e:
+            __log__.error("Failed to get new event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
+            os._exit(0)
+
+        if loop:
+            api_status = loop.run_until_complete(aiohttpclient.api_check())
+
     else:
-        __log__.critical(f'Network check returned with critical errors, cannot proceed with operation')
+        __log__.critical('Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED
 
     return core_status, api_status
@@ -300,7 +318,7 @@ if __name__ == "__main__":
         if not args.mode:
             start.print_help()
             os._exit(0)
-        elif args.mode == 'dev':
+        elif args.mode == 'dev': 
             Modes.dev()
             __log__.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
         elif args.mode == 'normal' or not args.mode:
@@ -312,23 +330,20 @@ if __name__ == "__main__":
         elif args.mode == 'debug':
             __log__.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
             Modes.debug()
-        
+
         # first, perform system checks
         try:
             core_status, api_status = sys_check()
         except KeyboardInterrupt:
-            __log__.warning(f"Received KeyboardInterrupt while performing system check!")
+            __log__.warning("Received KeyboardInterrupt while performing system check!")
             os._exit(0)
 
         if core_status == status.FAILED:
-            __log__.critical(f"Core system check returned with failure, terminating main process now")
+            __log__.critical("Core system check returned with failure, terminating main process now")
             os._exit(0)
-        
-        if api_status == status.FAILED:
-            __log__.warning(f"Cannot establish communication with API (#TODO: handle this) <-----")
 
         try:
-            run()
+            run(core_status, api_status)
         except KeyboardInterrupt:
-            __log__.warning(f"Shutting down")
+            __log__.warning("Shutting down")
             os._exit(0)

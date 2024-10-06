@@ -21,7 +21,7 @@ from typing import Callable, Dict, Any
 import src.data.requests as requests
 
 # internal helpers, configurations
-from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue, SensorAlerts
+from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue, SensorAlerts, status
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
 __log__ = log_config(logging.getLogger(__name__))
@@ -36,7 +36,7 @@ async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: a
     req_body = Dict | None
 
     if not client_session:
-        __log__.error(f"Error at aioclient.__router__(), client_session is empty!")
+        __log__.error("Error at %s, client_session is empty!", __name__)
         return
 
     async with semaphore:
@@ -57,6 +57,43 @@ async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: a
             if req_body:
                 stat, res_body = await requests.post_req(session=client_session, url=f"{APIRoutes.BASE_URL}{APIRoutes.SENSOR_ALERT}", data=req_body)
 
+# checks api health with the /health end point
+# returns:
+# success if no problem
+# disconnected if connection cannot be established (status code == 0)
+# failed if (400 - 500, etc.)
+async def api_check() -> status:
+    result: status = status.UNVERIFIED
+
+    # acquire running event loop for the aiohttp client
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        __log__.error("Failed to get running event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
+
+    # acquire an aiohttp.ClientSession object to work with requests module aiohttp framework
+    client: aiohttp.ClientSession | None = None
+    try:
+        client = aiohttp.ClientSession()
+    except Exception as e:
+        __log__.error("Failed to create ClientSession object (%s at PID %d): %s", __name__, os.getpid(), str(e))
+        return status.FAILED
+    
+    if loop and client:
+        stat, res_body = await requests.get_req(session=client, url=f"{APIRoutes.BASE_URL}{APIRoutes.HEALTH}")
+
+    # TODO: add other status
+    if stat == 200:
+        result = status.SUCCESS
+    elif stat == 0:
+        result = status.DISCONNECTED
+    else:
+        result = status.FAILED
+
+    await client.close()
+    
+    return result
+
 # TODO: documentation
 async def start(queue: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
@@ -67,7 +104,7 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} (aioclient child process): {e}")
+        __log__.error("Failed to get running event loop (%s at PID %d): %s", __name__, os.getpid(), str(e))
         return
     
     # acquire a aiohttp.ClientSession object
@@ -76,11 +113,11 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        __log__.error(f"Failed to create ClientSession object @ PID {os.getpid()} (aioclient child process): {e}")
+        __log__.error("Failed to create ClientSession object (%s at PID %d): %s", __name__, os.getpid(), str(e))
         return
 
     if loop and client:
-        __log__.info(f"AioHTTP Session Client subprocess active @ PID {os.getpid()}")
+        __log__.info("AioHTTP ClientSession subprocess active at PID %d", os.getpid())
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
