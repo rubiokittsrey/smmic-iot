@@ -28,7 +28,7 @@ def __var_from_env__(key: str) -> Any:
 # global vars
 LOGGING_LEVEL = logging.DEBUG
 ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
-__DEV_MODE__ = False
+_DEV_MODE = False
 
 def set_logging_level(level: int) -> None:
     global LOGGING_LEVEL
@@ -38,12 +38,15 @@ def enable_log_to_file(value: bool) -> None:
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
 
+# FIXME: not working properly
+# NOTE: supposed to set a global variable _DEV_MODE to true in order to
+# inform the operation that it is on development mode
 def dev_mode(val: bool) -> None:
-    global __DEV_MODE__
-    __DEV_MODE__ = val
+    global _DEV_MODE
+    _DEV_MODE = val
 
 def __get_dev_mode__() -> bool:
-    return __DEV_MODE__
+    return _DEV_MODE
 DEV_MODE = __get_dev_mode__()
 
 # development configurations

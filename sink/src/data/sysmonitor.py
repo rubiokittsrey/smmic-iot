@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from utils import log_config, is_num
 from settings import APPConfigurations, Topics
 
-__log__ = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(__name__))
 
 __CONNECTED_CLIENTS__ : int = 0
 __CLIENTS_TOTAL__ : int = 0
@@ -29,7 +29,7 @@ __MESSAGES_RECEIVED__ : int = 0
 
 __, __sys_topics__ = Topics.get_topics()
 
-async def __update_values__(topic : str, value : int) -> None:
+async def _update_values(topic : str, value : int) -> None:
     global __CONNECTED_CLIENTS__, __CLIENTS_TOTAL__, __SUB_COUNT__, __BYTES_SENT__, __BYTES_RECEIVED__, __MESSAGES_SENT__, __MESSAGES_RECEIVED__
 
     if topic == Topics.SYS_CLIENTS_CONNECTED:
@@ -47,17 +47,17 @@ async def __update_values__(topic : str, value : int) -> None:
     elif topic == Topics.SYS_MESSAGES_RECEIVED:
         __MESSAGES_RECEIVED__ = value
     else:
-        __log__.warning(f"Cannot assert $SYS topic of value @ sysmonitor: {topic}")
+        _log.warning(f"Cannot assert $SYS topic of value @ sysmonitor: {topic}")
 
     return
 
-def __from_sys_queue__(queue: multiprocessing.Queue) -> dict | None:
+def _from_sys_queue(queue: multiprocessing.Queue) -> dict | None:
     msg: dict | None = None
 
     try:
         msg = queue.get(timeout=0.1)
     except Exception as e:
-        __log__.error(f"Exception raised @ {os.getpid()} -> sysmonitor cannot get message from queue: {e}") if not queue.empty() else None
+        _log.error(f"Exception raised @ {os.getpid()} -> sysmonitor cannot get message from queue: {e}") if not queue.empty() else None
     except KeyboardInterrupt or asyncio.CancelledError:
         raise
 
@@ -65,7 +65,7 @@ def __from_sys_queue__(queue: multiprocessing.Queue) -> dict | None:
 
 # put the current values to the aiohttp queue
 # intervals of 5 minutes
-async def __put_to_queue__(queue: multiprocessing.Queue):
+async def _put_to_queue(queue: multiprocessing.Queue):
     msg: dict | None = {}
 
     try:
@@ -90,7 +90,7 @@ async def __put_to_queue__(queue: multiprocessing.Queue):
             try:
                 queue.put(msg)
             except Exception as e:
-                __log__.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
+                _log.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
     except (KeyboardInterrupt, asyncio.CancelledError):
         return
 
@@ -132,7 +132,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
                     f.append(_t(item))
 
     except Exception as e:
-        __log__.error(f"Unhandled exception occured at sysmonitor.__mem_check__: {str(e)}")
+        _log.error(f"Unhandled exception occured at sysmonitor.__mem_check__: {str(e)}")
 
     return mem_f, swap_f
 
@@ -143,24 +143,24 @@ async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Que
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"Failed to get running event loop @ PID {os.getpid()} sysmonitor module: {str(e)}")
+        _log.error(f"Failed to get running event loop @ PID {os.getpid()} sysmonitor module: {str(e)}")
         return
 
     if loop:
-        __log__.info(f"{__name__} coroutine active at PID {os.getpid()}")
+        _log.info(f"{__name__} coroutine active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
             # to do handle task cancellation of this
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
-                asyncio.create_task(__put_to_queue__(msg_queue))
+                asyncio.create_task(_put_to_queue(msg_queue))
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
                 try:
                     while True:
-                        msg = await loop.run_in_executor(pool, __from_sys_queue__, sys_queue)
+                        msg = await loop.run_in_executor(pool, _from_sys_queue, sys_queue)
                         if msg:
                             #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
-                            asyncio.create_task(__update_values__(topic=msg['topic'], value=int(msg['payload'])))
+                            asyncio.create_task(_update_values(topic=msg['topic'], value=int(msg['payload'])))
 
                         await asyncio.sleep(0.05)
 

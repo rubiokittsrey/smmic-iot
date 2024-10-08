@@ -40,8 +40,8 @@ if __name__ == "__main__":
     if(not args.function or args.function == 'network_check'):
         network.network_check()
     elif(args.function == 'ping'):
-        network.__ping__(host=args.host, repeat=args.repeat if args.repeat else 1)
+        network._ping(host=args.host, repeat=args.repeat if args.repeat else 1)
     elif(args.function == 'check_interface'):
-        network.__check_interface__()
+        network._check_interface()
     elif(args.function == 'timeout_handler'):
-        network.__time_out_handler__(network.__ping__)
+        network._time_out_handler(network._ping)

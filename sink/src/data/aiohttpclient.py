@@ -7,6 +7,8 @@ this is the aiohttp session module of the entire system
 # TODO: documentation
 """
 
+PRETTY_ALIAS = "AIO HTTP Client"
+
 # third-party
 import logging
 import aiohttp
@@ -24,13 +26,11 @@ import src.data.requests as requests
 from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue, SensorAlerts, status
 from settings import APPConfigurations, Topics, APIRoutes, Broker
 
-__log__ = log_config(logging.getLogger(__name__))
-
-__PRETTY_ALIAS__ = "AIO HTTP Client"
+_log = log_config(logging.getLogger(__name__))
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
-async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: aiohttp.ClientSession) -> Any:
+async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aiohttp.ClientSession) -> Any:
     # NOTE:
     # ----- data keys -> {priorty, topic, payload, timestamp}
     # ----- (sensor alert) data keys -> {device_id, timestamp, alertCode}
@@ -38,7 +38,7 @@ async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: a
     req_body = Dict | None
 
     if not client_session:
-        __log__.error("Error at %s, client_session is empty!", __name__)
+        _log.error("Error at %s, client_session is empty!", __name__)
         return
 
     async with semaphore:
@@ -64,21 +64,21 @@ async def __router__(semaphore: asyncio.Semaphore, data: Dict, client_session: a
 # success if no problem
 # disconnected if connection cannot be established (status code == 0)
 # failed if (400 - 500, etc.)
-async def api_check() -> status:
-    result: status = status.UNVERIFIED
+async def api_check() -> int:
+    result: int = status.UNVERIFIED
 
     # acquire running event loop for the aiohttp client
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"Failed to get running event loop ({__name__} at PID {os.getpid()}): {str(e)}")
+        _log.error(f"Failed to get running event loop ({__name__} at PID {os.getpid()}): {str(e)}")
 
     # acquire an aiohttp.ClientSession object to work with requests module aiohttp framework
     client: aiohttp.ClientSession | None = None
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        __log__.error(f"Failed to create client session object ({__name__} at {os.getpid(())}): {str(e)}")
+        _log.error(f"Failed to create client session object ({__name__} at {os.getpid()}): {str(e)}")
         return status.FAILED
     
     if loop and client:
@@ -106,7 +106,7 @@ async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue)
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"{__PRETTY_ALIAS__} failed to get running event loop: {str(e)}")
+        _log.error(f"{PRETTY_ALIAS} failed to get running event loop: {str(e)}")
         return
     
     # acquire a aiohttp.ClientSession object
@@ -115,11 +115,11 @@ async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue)
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        __log__.error(f"{__PRETTY_ALIAS__} failed to create client session object: {str(e)}")
+        _log.error(f"{PRETTY_ALIAS} failed to create client session object: {str(e)}")
         return
 
     if loop and client:
-        __log__.info(f"{__PRETTY_ALIAS__} subprocess active at PID {os.getpid()}")
+        _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
@@ -127,8 +127,8 @@ async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue)
 
                     # if an item is retrieved
                     if item:
-                        #__log__.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
-                        asyncio.create_task(__router__(semaphore, item, client))
+                        #_log.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
+                        asyncio.create_task(_router(semaphore, item, client))
 
         except KeyboardInterrupt or asyncio.CancelledError:
             # close the aiohttp session client

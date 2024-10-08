@@ -1,4 +1,4 @@
-import logging as __logging__
+import logging as _logging
 import settings
 import os
 import re
@@ -16,10 +16,10 @@ os.makedirs(log_directory, exist_ok=True)
 log_path = os.path.join(log_directory, log_file)
 
 # LOG VARIABLES (HANDLERS, FORMATTER)
-__LOGGER_LIST__ = []
-__LOG_FILE_HANDLER__ = __logging__.FileHandler(log_path)
-__CONSOLE_HANDLER__ = __logging__.StreamHandler()
-__LOG_FORMATTER__ = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_LOGGER_LIST = []
+_LOG_FILE_HANDLER = _logging.FileHandler(log_path)
+_CONSOLE_HANDLER = _logging.StreamHandler()
+_LOG_FORMATTER = _logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 class status:
     # checks
@@ -38,16 +38,16 @@ class status:
 
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
-def log_config(logger) -> __logging__.Logger:
-    global __LOGGER_LIST__
-    __LOGGER_LIST__.append(logger)
-    logger.setLevel(__logging__.DEBUG)
+def log_config(logger) -> _logging.Logger:
+    global _LOGGER_LIST
+    _LOGGER_LIST.append(logger)
+    logger.setLevel(_logging.DEBUG)
 
-    console_handler = __CONSOLE_HANDLER__
-    logs_handler = __LOG_FILE_HANDLER__
+    console_handler = _CONSOLE_HANDLER
+    logs_handler = _LOG_FILE_HANDLER
 
-    console_handler.setFormatter(__LOG_FORMATTER__)
-    logs_handler.setFormatter(__LOG_FORMATTER__)
+    console_handler.setFormatter(_LOG_FORMATTER)
+    logs_handler.setFormatter(_LOG_FORMATTER)
 
     logger.addHandler(console_handler)
     logger.addHandler(logs_handler) if settings.ENABLE_LOG_TO_FILE else None
@@ -57,9 +57,9 @@ def log_config(logger) -> __logging__.Logger:
 __log__ = log_config(logging.getLogger(__name__))
 
 def set_logging_configuration():
-    for logger in __LOGGER_LIST__:
+    for logger in _LOGGER_LIST:
         logger.setLevel(settings.LOGGING_LEVEL)
-        logger.removeHandler(__LOG_FILE_HANDLER__) if not settings.ENABLE_LOG_TO_FILE else None
+        logger.removeHandler(_LOG_FILE_HANDLER) if not settings.ENABLE_LOG_TO_FILE else None
 
 # parses and returns the packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really
@@ -113,18 +113,25 @@ def parse_err_ping(output) -> Tuple[str | None, ...]:
 
 # application modes
 class Modes:
-    def dev(): #type: ignore
+    @staticmethod
+    def dev():
         settings.dev_mode(True)
         settings.set_logging_level(logging.DEBUG)
         settings.enable_log_to_file(False)
         set_logging_configuration()
-    def normal(): #type: ignore
+
+    @staticmethod
+    def normal():
         settings.set_logging_level(logging.WARNING)
         set_logging_configuration()
-    def info(): #type: ignore
+    
+    @staticmethod
+    def info():
         settings.set_logging_level(logging.INFO)
         set_logging_configuration()
-    def debug(): #type: ignore
+
+    @staticmethod
+    def debug():
         settings.set_logging_level(logging.DEBUG)
         set_logging_configuration()
 
@@ -323,6 +330,7 @@ class SensorAlerts:
     # timestamp;
     # alert_code
     # ---------
+    @staticmethod
     def map_sensor_alert(payload: str) -> Dict | None:
         final: Dict | None
 
@@ -358,5 +366,6 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
 class ExceptionsHandler:
 
     class event_loop:
-        def unhandled(self, name: str, pid: int, err: str):
+        @staticmethod
+        def unhandled(name: str, pid: int, err: str):
             __log__.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")

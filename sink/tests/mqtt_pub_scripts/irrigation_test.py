@@ -71,5 +71,10 @@ async def __signal_off__(client: mqtt.Client, device_id: str):
     except Exception as e:
         print(f"err @ __signal_off__: {e}")
 
+    try:
+        client.disconnect()
+    except Exception as e:
+        print(f'err @ run_test: {e}')
+
 if __name__ == '__main__':
     asyncio.run(run_test())

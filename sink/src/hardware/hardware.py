@@ -1,5 +1,9 @@
 # the main hardware module of the system
 # TODO: documentation
+#
+#
+
+PRETTY_ALIAS = "Hardware"
 
 # third-party
 import asyncio
@@ -15,28 +19,27 @@ from settings import Topics, APPConfigurations, Broker
 if not APPConfigurations.DISABLE_IRRIGATION:
     import src.hardware.irrigation as irrigation
 
-__log__ = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(__name__))
 
-__PRETTY_ALIAS__ = "Hardware"
-
-__IRRIGATION_QUEUE__: multiprocessing.Queue = multiprocessing.Queue()
+# hardware workers queues
+_IRRIGATION_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
 # hardware tasks callbacks
 def irrigation_callback(signal : int) -> None:
     global __IRRIGATION_SIGNAL__
     __IRRIGATION_SIGNAL__ = signal
 
-async def __delegator__(semaphore: asyncio.Semaphore, task: Dict) -> Any:
+async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     async with semaphore:
         task_keys : List = list(task.keys())
 
         if 'disconnected' in task_keys:
-            __IRRIGATION_QUEUE__.put(task)
+            _IRRIGATION_QUEUE.put(task)
 
         if 'topic' in task_keys:
             task_payload = irrigation.map_irrigation_payload(task['payload'])
             if task_payload:
-                __IRRIGATION_QUEUE__.put(task_payload)
+                _IRRIGATION_QUEUE.put(task_payload)
 
 # begin the hardware module process
 async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue) -> None:
@@ -46,20 +49,20 @@ async def start(c_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue)
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        __log__.error(f"Failed to get running event loop at PID {os.getpid()} (hardware module child process): {e}")
+        _log.error(f"Failed to get running event loop at PID {os.getpid()} (hardware module child process): {e}")
         return
 
     if loop:
-        __log__.info(f"{__PRETTY_ALIAS__} subprocess active at PID {os.getpid()}")
+        _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
 
         try:
-            asyncio.create_task(irrigation.start(__IRRIGATION_QUEUE__))
+            asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
             with ThreadPoolExecutor() as pool:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, c_queue, __name__)
                     if task:
-                        asyncio.create_task(__delegator__(semaphore, task))
+                        asyncio.create_task(_delegator(semaphore, task))
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            __log__.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")
+            _log.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")

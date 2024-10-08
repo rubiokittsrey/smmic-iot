@@ -16,12 +16,12 @@ from decimal import Decimal
 from settings import APIRoutes, APPConfigurations
 from utils import log_config
 
-__log__ = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(__name__))
 
-# request decorator that provides request statistics and handles exception
+# internal request decorator that provides request statistics and handles exception
 # TODO: add other stats, store failed requests, implement failed request protocol
 # returns the response status and the response body
-def __req__(func: Callable) -> Any:
+def _req(func: Callable) -> Any:
     async def _wrapper(*args, **kwargs) -> Tuple[int, dict | None]:
         start = time.time()
         attempt = 0
@@ -63,21 +63,21 @@ def __req__(func: Callable) -> Any:
                     pass
                 else:
                     count = err.count(e)
-                    __log__.error((f"({count}) " if count > 1 else "") + e + " ")
+                    _log.error((f"({count}) " if count > 1 else "") + e + " ")
                     _logged.append(e)
 
         # if err length == retries, request failed
         if len(err) == retries:
-            __log__.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
+            _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
         else:
-            __log__.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s): {res_body}")
+            _log.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s): {res_body}")
         
         return res_stat, res_body
     
     return _wrapper
 
 # TODO: create a unit test at api_test.py
-@__req__
+@_req
 async def get_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -93,7 +93,7 @@ async def get_req(
         return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
-@__req__
+@_req
 async def post_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -109,7 +109,7 @@ async def post_req(
         return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
-@__req__
+@_req
 async def put_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -119,11 +119,11 @@ async def put_req(
 
     async with session.put(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        __log__.debug(f"Put request successful: {response.status} -> {await response.json()}")
+        _log.debug(f"Put request successful: {response.status} -> {await response.json()}")
         return response
 
 # TODO: create a unit test at api_test.py
-@__req__
+@_req
 async def patch_req(
         session: aiohttp.ClientSession,
         url: str,
@@ -133,11 +133,11 @@ async def patch_req(
     
     async with session.patch(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        __log__.debug(f"Patch request successful: {response.status} -> {await response.json()}")
+        _log.debug(f"Patch request successful: {response.status} -> {await response.json()}")
         return response
 
 # TODO: create a unit test at api_test.py
-@__req__
+@_req
 async def delete_req(
         session: aiohttp.ClientSession,
         url: str,
@@ -147,5 +147,5 @@ async def delete_req(
     
     async with session.delete(url, json=data, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
         response.raise_for_status()
-        __log__.debug(f"Delete request successful: {response.status} -> {await response.json()}")
+        _log.debug(f"Delete request successful: {response.status} -> {await response.json()}")
         return response

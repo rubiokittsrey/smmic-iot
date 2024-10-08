@@ -26,7 +26,7 @@ from src.data import aiohttpclient
 from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
 # from settings import Broker
 
-__log__ = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(__name__))
 
 # runs the task_manager asyncio event loop
 # this loop is important to allow concurrent task execution
@@ -43,7 +43,7 @@ def run_task_manager(
     try:
         loop = asyncio.new_event_loop()
     except Exception as e:
-        __log__.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (child process): {str(e)}")
+        _log.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
 
     # if loop event loop is present, start taskmanager
@@ -63,7 +63,7 @@ def run_task_manager(
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Closing the taskmanager loop and exiting process at PID {os.getpid()}")
+            _log.debug(f"Closing the taskmanager loop and exiting process at PID {os.getpid()}")
             taskmanager_t.cancel()
             # await cleanup
             try:
@@ -72,11 +72,11 @@ def run_task_manager(
                 pass
             raise
         except Exception as e:
-            __log__.error(f"Failed to run task manager loop: {str(e)}")
+            _log.error(f"Failed to run task manager loop: {str(e)}")
         finally:
             loop.close()
 
-def run_aio_client(queue: multiprocessing.Queue) -> None:
+def run_aio_client(queue: multiprocessing.Queue, task_queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
 
     # its very important the a new event loop is instantiated
@@ -84,17 +84,17 @@ def run_aio_client(queue: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.new_event_loop()
     except Exception as e:
-        __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
+        _log.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
 
     if loop:
         # the aiohttpclient module
         # handles all requests coming to and from the api
-        aiohttpclient_t = loop.create_task(aiohttpclient.start(queue))
+        aiohttpclient_t = loop.create_task(aiohttpclient.start(queue, task_queue))
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Closing the aiohttpclient loop and exiting process @ PID {os.getpid()}")
+            _log.debug(f"Closing the aiohttpclient loop and exiting process @ PID {os.getpid()}")
             aiohttpclient_t.cancel()
             # await cleanup
             try:
@@ -103,27 +103,27 @@ def run_aio_client(queue: multiprocessing.Queue) -> None:
                 pass
             raise
         except Exception as e:
-            __log__.error(f"Failed to run aioClient loop: {str(e)}")
+            _log.error(f"Failed to run aioClient loop: {str(e)}")
         finally:
             loop.close()
 
-def run_hardware_p(queue: multiprocessing.Queue) -> None:
+def run_hardware_p(queue: multiprocessing.Queue, task_queue: multiprocessing.Queue) -> None:
     loop: asyncio.AbstractEventLoop | None = None
 
     try:
         loop = asyncio.new_event_loop()
     except Exception as e:
-        __log__.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
+        _log.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
         os._exit(0)
 
     if loop:
         # the hardware module process
         # handles all requests coming to and from the api
-        hardware_t = loop.create_task(hardware.start(queue))
+        hardware_t = loop.create_task(hardware.start(queue, task_queue))
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Closing the harware module process and exiting at PID {os.getpid()}")
+            _log.debug(f"Closing the harware module process and exiting at PID {os.getpid()}")
             hardware_t.cancel()
 
             try:
@@ -132,7 +132,7 @@ def run_hardware_p(queue: multiprocessing.Queue) -> None:
                 pass
             raise
         except Exception as e:
-            __log__.error(f"Failed to run hardware module loop: {str(e)}")
+            _log.error(f"Failed to run hardware module loop: {str(e)}")
         finally:
             loop.close()
 
@@ -146,27 +146,27 @@ def run_sub_p(*args, **kwargs):
     try:
         sub_p = kwargs.pop('sub_proc')
     except KeyError:
-        __log__.error(f"Failed to run sub process: kwargs missing 'sub_proc' key ({__name__} at {os.getpid()})")
+        _log.error(f"Failed to run sub process: kwargs missing 'sub_proc' key ({__name__} at {os.getpid()})")
         raise
 
     try:
         pretty_alias = kwargs.pop('pretty_alias')
     except KeyError:
-        __log__.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
+        _log.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
         pretty_alias = sub_p.__name__
 
     loop = None
     try:
         loop = asyncio.new_event_loop()
     except Exception as e:
-        __log__.error(f"Failed to start event loop")
+        _log.error(f"Failed to start event loop")
 
     if loop:
         proc_t = loop.create_task(sub_p(**kwargs))
         try:
             loop.run_forever()
         except KeyboardInterrupt:
-            __log__.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
+            _log.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
             proc_t.cancel()
 
             # allow cleanup
@@ -177,14 +177,14 @@ def run_sub_p(*args, **kwargs):
             raise
 
         except Exception as e:
-            __log__.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
+            _log.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
         finally:
             loop.close()
 
 # the main function of this operation
 # and the parent process of the task manager process
 async def main(loop: asyncio.AbstractEventLoop) -> None:
-    __log__.info(f"SMMIC running at PID {os.getpid()}")
+    _log.info(f"SMMIC running at PID {os.getpid()}")
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
@@ -194,7 +194,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     sys_queue = multiprocessing.Queue()
 
     task_manager_kwargs = {
-        'pretty_alias': taskmanager.__PRETTY_ALIAS__,
+        'pretty_alias': taskmanager.PRETTY_ALIAS,
         'sub_proc': taskmanager.start,
         'task_queue': task_queue,
         'c_queue': task_consume_queue,
@@ -204,14 +204,14 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     }
 
     aio_client_kwargs = {
-        'pretty_alias': aiohttpclient.__PRETTY_ALIAS__,
+        'pretty_alias': aiohttpclient.PRETTY_ALIAS,
         'sub_proc': aiohttpclient.start,
         'c_queue': aio_queue,
         'tm_queue': task_consume_queue
     }
 
     hardware_kwargs = {
-        'pretty_alias': hardware.__PRETTY_ALIAS__,
+        'pretty_alias': hardware.PRETTY_ALIAS,
         'sub_proc': hardware.start,
         'c_queue': hardware_queue,
         'tm_queue': task_consume_queue
@@ -248,7 +248,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         try:
             await asyncio.gather(callback_client_task)
         except asyncio.CancelledError:
-            __log__.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
+            _log.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
             for proc in processes:
                 proc.terminate()
@@ -265,15 +265,15 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
             await asyncio.sleep(0.05)
 
     except Exception as e:
-        __log__.error(f"Parent process called exception error: {str(e)}")
+        _log.error(f"Parent process called exception error: {str(e)}")
         os._exit(0)
 
 # create a new event loop and then run the main process within that loop
-def run(core_status: status, api_status: status):
+def run(core_status: int, api_status: int | None):
     if api_status == status.DISCONNECTED:
-            __log__.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
+            _log.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
     elif api_status == status.FAILED:
-        __log__.warning("API Health check returned with failure, proceeding with API fail protocols")
+        _log.warning("API Health check returned with failure, proceeding with API fail protocols")
 
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -296,9 +296,9 @@ def run(core_status: status, api_status: status):
                 pass
             raise
         except Exception as e:
-            __log__.error(f"Failed to run main loop: {str(e)}")
+            _log.error(f"Failed to run main loop: {str(e)}")
         finally:
-            __log__.debug(f"Closing main() loop at PID {os.getpid()}")
+            _log.debug(f"Closing main() loop at PID {os.getpid()}")
             loop.close()
     else:
         return
@@ -314,7 +314,7 @@ def sys_check() -> Tuple[int, int | None]:
     # i.e. store data locally (and only until uploaded to api)
     api_status: int | None = None
 
-    __log__.info(f"Performing core system checks")
+    _log.info(f"Performing core system checks")
 
     # perform the network check function from the network module
     # check interface status, ping gateway to verify connectivity
@@ -324,13 +324,13 @@ def sys_check() -> Tuple[int, int | None]:
         raise
 
     if net_check == status.SUCCESS:
-        __log__.debug(f'Network check successful, checking mosquitto service status')
+        _log.debug(f'Network check successful, checking mosquitto service status')
 
         # check mosquitto service status
         # if mosquitto service check returns status.SUCCESS, proceed with api connection check
         mqtt_status = service.mqtt_status_check()
         if mqtt_status == status.ACTIVE:
-            __log__.debug('MOSQUITTO Broker status: active')
+            _log.debug('MOSQUITTO Broker status: active')
             core_status = status.SUCCESS
         else:
             core_status = status.FAILED
@@ -344,14 +344,14 @@ def sys_check() -> Tuple[int, int | None]:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         except Exception as e:
-            ExceptionsHandler.event_loop.unhandled(__name__, os.getpid(), e)
+            ExceptionsHandler.event_loop.unhandled(__name__, os.getpid(), str(e))
             os._exit(0)
 
         if loop:
             api_status = loop.run_until_complete(aiohttpclient.api_check())
 
     else:
-        __log__.critical('Network check returned with critical errors, cannot proceed with operation')
+        _log.critical('Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED
 
     return core_status, api_status
@@ -384,30 +384,30 @@ if __name__ == "__main__":
             os._exit(0)
         elif args.mode == 'dev': 
             Modes.dev()
-            __log__.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
+            _log.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
         elif args.mode == 'normal' or not args.mode:
-            __log__.info('Starting in normal mode with WARNING level logging and logging to file enabled')
+            _log.info('Starting in normal mode with WARNING level logging and logging to file enabled')
             Modes.normal()
         elif args.mode == 'info':
-            __log__.info('Starting in normal mode with INFO level logging and logging to file enabled')
+            _log.info('Starting in normal mode with INFO level logging and logging to file enabled')
             Modes.info()
         elif args.mode == 'debug':
-            __log__.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
+            _log.info('Starting in debug mode with DEBUG level logging and logging to file enabled')
             Modes.debug()
 
         # first, perform system checks
         try:
             core_status, api_status = sys_check()
         except KeyboardInterrupt:
-            __log__.warning("Received KeyboardInterrupt while performing system check!")
+            _log.warning("Received KeyboardInterrupt while performing system check!")
             os._exit(0)
 
         if core_status == status.FAILED:
-            __log__.critical("Core system check returned with failure, terminating main process now")
+            _log.critical("Core system check returned with failure, terminating main process now")
             os._exit(0)
 
         try:
             run(core_status, api_status)
         except KeyboardInterrupt:
-            __log__.warning("Shutting down")
+            _log.warning("Shutting down")
             os._exit(0)
