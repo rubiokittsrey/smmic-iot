@@ -42,7 +42,7 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
                 _IRRIGATION_QUEUE.put(task_payload)
 
 # begin the hardware module process
-async def start(hardware_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue) -> None:
+async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     # acquire the current running event loop
     loop: asyncio.AbstractEventLoop | None = None
@@ -59,7 +59,7 @@ async def start(hardware_queue: multiprocessing.Queue, tm_queue: multiprocessing
             asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
             with ThreadPoolExecutor() as pool:
                 while True:
-                    task = await loop.run_in_executor(pool, get_from_queue, hardware_queue, __name__)
+                    task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)
                     if task:
                         asyncio.create_task(_delegator(semaphore, task))
         except KeyboardInterrupt:

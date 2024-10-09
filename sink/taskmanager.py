@@ -114,10 +114,10 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
 #
 async def start(
-        task_queue: multiprocessing.Queue,
-        aio_queue: multiprocessing.Queue,
-        hardware_queue: multiprocessing.Queue,
-        sys_queue: multiprocessing.Queue
+        tskmngr_q: multiprocessing.Queue,
+        aiohttpclient_q: multiprocessing.Queue,
+        hardware_q: multiprocessing.Queue,
+        sysmonitor_q: multiprocessing.Queue
         ) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
@@ -137,11 +137,11 @@ async def start(
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             # start the sysmonitor coroutine
-            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, tskmngr_queue=task_queue))
+            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sysmonitor_q, tskmngr_queue=tskmngr_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    task = await loop.run_in_executor(pool, get_from_queue, task_queue, __name__)
+                    task = await loop.run_in_executor(pool, get_from_queue, tskmngr_q, __name__)
 
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
@@ -156,7 +156,7 @@ async def start(
                             _log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
-                        asyncio.create_task(_delegator(semaphore=semaphore, data=task, aio_queue=aio_queue, hardware_queue=hardware_queue))
+                        asyncio.create_task(_delegator(semaphore=semaphore, data=task, aio_queue=aiohttpclient_q, hardware_queue=hardware_q))
 
                     await asyncio.sleep(0.05)
                     

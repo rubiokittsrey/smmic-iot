@@ -89,24 +89,24 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     task_manager_kwargs = {
         'pretty_alias': taskmanager.PRETTY_ALIAS,
         'sub_proc': taskmanager.start,
-        'task_queue': task_queue,
-        'aio_queue': aio_queue,
-        'hardware_queue': hardware_queue,
-        'sys_queue': sys_queue
+        'tskmngr_q': task_queue,
+        'aiohttpclient_q': aio_queue,
+        'hardware_q': hardware_queue,
+        'sysmonitor_q': sys_queue
     }
 
     aio_client_kwargs = {
         'pretty_alias': aiohttpclient.PRETTY_ALIAS,
         'sub_proc': aiohttpclient.start,
-        'aio_queue': aio_queue,
-        'task_queue': task_queue
+        'aiohttpclient_q': aio_queue,
+        'tskmngr_q': task_queue
     }
 
     hardware_kwargs = {
         'pretty_alias': hardware.PRETTY_ALIAS,
         'sub_proc': hardware.start,
-        'hardware_queue': hardware_queue,
-        'tm_queue': task_queue
+        'hardware_q': hardware_queue,
+        'tskmngr_q': task_queue
     }
 
     kwargs_list = [task_manager_kwargs, aio_client_kwargs, hardware_kwargs]

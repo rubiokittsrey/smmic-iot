@@ -97,7 +97,7 @@ async def api_check() -> int:
     return result
 
 # TODO: documentation
-async def start(aio_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queue) -> None:
+async def start(aiohttpclient_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
@@ -123,7 +123,7 @@ async def start(aio_queue: multiprocessing.Queue, tm_queue: multiprocessing.Queu
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    item = await loop.run_in_executor(pool, get_from_queue, aio_queue, __name__) # non-blocking message retrieval
+                    item = await loop.run_in_executor(pool, get_from_queue, aiohttpclient_q, __name__) # non-blocking message retrieval
 
                     # if an item is retrieved
                     if item:
