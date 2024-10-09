@@ -28,116 +28,6 @@ from utils import log_config, Modes, status, ExceptionsHandler # priority, set_p
 
 _log = log_config(logging.getLogger(__name__))
 
-# runs the task_manager asyncio event loop
-# this loop is important to allow concurrent task execution
-
-def run_task_manager(
-        task_queue: multiprocessing.Queue,
-        c_queue: multiprocessing.Queue,
-        aio_queue: multiprocessing.Queue,
-        hardware_queue: multiprocessing.Queue,
-        sys_queue: multiprocessing.Queue
-        ) -> None:
-
-    loop: asyncio.AbstractEventLoop | None = None
-    try:
-        loop = asyncio.new_event_loop()
-    except Exception as e:
-        _log.error(f"Failed to create event loop with asyncio.new_event_loop() @ PID {os.getpid()} (child process): {str(e)}")
-        os._exit(0)
-
-    # if loop event loop is present, start taskmanager
-    if loop:
-        # the task manager module
-        # handles the messages incoming from the queue
-        taskmanager_t = loop.create_task(
-            taskmanager.start(
-                task_queue=task_queue,
-                c_queue=c_queue,
-                aio_queue=aio_queue,
-                hardware_queue=hardware_queue,
-                sys_queue=sys_queue
-                )
-            )
-        
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            _log.debug(f"Closing the taskmanager loop and exiting process at PID {os.getpid()}")
-            taskmanager_t.cancel()
-            # await cleanup
-            try:
-                loop.run_until_complete(taskmanager_t)
-            except asyncio.CancelledError:
-                pass
-            raise
-        except Exception as e:
-            _log.error(f"Failed to run task manager loop: {str(e)}")
-        finally:
-            loop.close()
-
-def run_aio_client(queue: multiprocessing.Queue, task_queue: multiprocessing.Queue) -> None:
-    loop: asyncio.AbstractEventLoop | None = None
-
-    # its very important the a new event loop is instantiated
-    # if this somehow fails, exit this current process
-    try:
-        loop = asyncio.new_event_loop()
-    except Exception as e:
-        _log.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
-        os._exit(0)
-
-    if loop:
-        # the aiohttpclient module
-        # handles all requests coming to and from the api
-        aiohttpclient_t = loop.create_task(aiohttpclient.start(queue, task_queue))
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            _log.debug(f"Closing the aiohttpclient loop and exiting process @ PID {os.getpid()}")
-            aiohttpclient_t.cancel()
-            # await cleanup
-            try:
-                loop.run_until_complete(aiohttpclient_t)
-            except asyncio.CancelledError:
-                pass
-            raise
-        except Exception as e:
-            _log.error(f"Failed to run aioClient loop: {str(e)}")
-        finally:
-            loop.close()
-
-def run_hardware_p(queue: multiprocessing.Queue, task_queue: multiprocessing.Queue) -> None:
-    loop: asyncio.AbstractEventLoop | None = None
-
-    try:
-        loop = asyncio.new_event_loop()
-    except Exception as e:
-        _log.error(f"Failed to start event loop with asyncio.new_event_loop @ PID {os.getpid()} (child process): {str(e)}")
-        os._exit(0)
-
-    if loop:
-        # the hardware module process
-        # handles all requests coming to and from the api
-        hardware_t = loop.create_task(hardware.start(queue, task_queue))
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            _log.debug(f"Closing the harware module process and exiting at PID {os.getpid()}")
-            hardware_t.cancel()
-
-            try:
-                loop.run_until_complete(hardware_t)
-            except asyncio.CancelledError:
-                pass
-            raise
-        except Exception as e:
-            _log.error(f"Failed to run hardware module loop: {str(e)}")
-        finally:
-            loop.close()
-
-    #TODO: implement
-
 # abstract function to run sub processes
 def run_sub_p(*args, **kwargs):
     pretty_alias: str
@@ -161,25 +51,29 @@ def run_sub_p(*args, **kwargs):
     except Exception as e:
         _log.error(f"Failed to start event loop")
 
-    if loop:
-        proc_t = loop.create_task(sub_p(**kwargs))
+    if not loop:
+        return
+
+    proc_t = loop.create_task(sub_p(**kwargs))
+    try:
+        loop.run_until_complete(proc_t)
+    except KeyboardInterrupt:
+        _log.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
+        proc_t.cancel()
+
+        # cleanup
         try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            _log.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
-            proc_t.cancel()
-
-            # allow cleanup
-            try:
-                loop.run_until_complete(proc_t)
-            except asyncio.CancelledError:
-                pass
-            raise
-
-        except Exception as e:
-            _log.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
+            loop.run_until_complete(proc_t)
+        except asyncio.CancelledError:
+            pass
         finally:
-            loop.close()
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        raise
+
+    except Exception as e:
+        _log.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
+    finally:
+        loop.close()
 
 # the main function of this operation
 # and the parent process of the task manager process
@@ -188,7 +82,6 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
-    task_consume_queue = multiprocessing.Queue()
     aio_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
@@ -197,7 +90,6 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         'pretty_alias': taskmanager.PRETTY_ALIAS,
         'sub_proc': taskmanager.start,
         'task_queue': task_queue,
-        'c_queue': task_consume_queue,
         'aio_queue': aio_queue,
         'hardware_queue': hardware_queue,
         'sys_queue': sys_queue
@@ -206,21 +98,20 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     aio_client_kwargs = {
         'pretty_alias': aiohttpclient.PRETTY_ALIAS,
         'sub_proc': aiohttpclient.start,
-        'c_queue': aio_queue,
-        'tm_queue': task_consume_queue
+        'aio_queue': aio_queue,
+        'task_queue': task_queue
     }
 
     hardware_kwargs = {
         'pretty_alias': hardware.PRETTY_ALIAS,
         'sub_proc': hardware.start,
-        'c_queue': hardware_queue,
-        'tm_queue': task_consume_queue
+        'hardware_queue': hardware_queue,
+        'tm_queue': task_queue
     }
 
     kwargs_list = [task_manager_kwargs, aio_client_kwargs, hardware_kwargs]
 
     try:
-
         # first, spawn and run the task manager process
         processes : List[multiprocessing.Process] = []
         for p_kwargs in kwargs_list:
@@ -236,7 +127,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
             proc.start()
 
         # sub-second delay ensure that all sub-processes are already spawned before starting the callback_client coroutine of this process
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(0.5)
 
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
@@ -247,12 +138,14 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # shutdown and cleanup
         try:
             await asyncio.gather(callback_client_task)
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             _log.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
             for proc in processes:
                 proc.terminate()
-
+            
+            # short wait to ensure proc termination
+            await asyncio.sleep(0.5)
             for proc in processes:
                 proc.join()
 
@@ -260,13 +153,13 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
             raise
 
-        # keep the main thread alive
+        # keep main thread alive
         while True:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.25)
 
     except Exception as e:
-        _log.error(f"Parent process called exception error: {str(e)}")
-        os._exit(0)
+        _log.error(f"Parent process called exception: {str(e)}")
+        raise SystemExit()
 
 # create a new event loop and then run the main process within that loop
 def run(core_status: int, api_status: int | None):

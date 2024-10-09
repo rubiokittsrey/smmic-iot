@@ -115,7 +115,6 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 #
 async def start(
         task_queue: multiprocessing.Queue,
-        c_queue: multiprocessing.Queue,
         aio_queue: multiprocessing.Queue,
         hardware_queue: multiprocessing.Queue,
         sys_queue: multiprocessing.Queue
@@ -138,7 +137,7 @@ async def start(
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             # start the sysmonitor coroutine
-            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, msg_queue=task_queue))
+            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sys_queue, tskmngr_queue=task_queue))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way

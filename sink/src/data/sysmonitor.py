@@ -137,7 +137,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
     return mem_f, swap_f
 
 # start this module / coroutine
-async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Queue) -> None:
+async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing.Queue) -> None:
     # verify existence of event loop
     loop = None
     try:
@@ -153,7 +153,7 @@ async def start(sys_queue: multiprocessing.Queue, msg_queue: multiprocessing.Que
             # to do handle task cancellation of this
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
-                asyncio.create_task(_put_to_queue(msg_queue))
+                asyncio.create_task(_put_to_queue(tskmngr_queue))
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
                 try:
                     while True:
