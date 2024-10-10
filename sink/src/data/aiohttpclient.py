@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Dict, Any
 
 # internal core modules
-import src.data.requests as requests
+import reqs as reqs
 
 # internal helpers, configurations
 from utils import log_config, map_sensor_payload, map_sink_payload, get_from_queue, SensorAlerts, status
@@ -47,17 +47,17 @@ async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aioh
 
         if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}":
             req_body = map_sensor_payload(data['payload'])
-            stat, res_body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=req_body)
+            stat, res_body = await reqs.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SENSOR_DATA}', data=req_body)
 
         if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SINK_DATA}":
             req_body = map_sink_payload(data['payload'])
-            stat, res_body = await requests.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=req_body)
+            stat, res_body = await reqs.post_req(session=client_session, url=f'{APIRoutes.BASE_URL}{APIRoutes.SINK_DATA}', data=req_body)
 
         if data['topic'] == f"{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}":
             req_body = SensorAlerts.map_sensor_alert(data['payload'])
 
             if req_body:
-                stat, res_body = await requests.post_req(session=client_session, url=f"{APIRoutes.BASE_URL}{APIRoutes.SENSOR_ALERT}", data=req_body)
+                stat, res_body = await reqs.post_req(session=client_session, url=f"{APIRoutes.BASE_URL}{APIRoutes.SENSOR_ALERT}", data=req_body)
 
 # checks api health with the /health end point
 # returns:
@@ -82,7 +82,7 @@ async def api_check() -> int:
         return status.FAILED
     
     if loop and client:
-        stat, res_body = await requests.get_req(session=client, url=f"{APIRoutes.BASE_URL}{APIRoutes.HEALTH}")
+        stat, res_body = await reqs.get_req(session=client, url=f"{APIRoutes.BASE_URL}{APIRoutes.HEALTH}")
 
     # TODO: add other status
     if stat == 200:
