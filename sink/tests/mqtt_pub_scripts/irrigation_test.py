@@ -50,7 +50,7 @@ async def abstracted_pub():
 async def init_and_conn(device_id: str, timestamp) -> mqtt.Client:
     client = mqtt.Client(client_id=device_id)
     client.will_set('smmic/sensor/alert', f"{device_id};{timestamp};0")
-    client.connect('192.168.1.100', 1883)
+    client.connect(Broker.HOST, 1883)
     client.loop_start()
 
     return client
