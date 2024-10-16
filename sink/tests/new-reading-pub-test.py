@@ -8,7 +8,7 @@ from paho.mqtt import client as mqtt, enums
 from settings import Topics, Broker
 
 client = mqtt.Client(client_id="test_pub1")
-client.connect('192.168.1.25', 1883)
+client.connect(Broker.HOST, 1883)
 client.loop_start()
 
 k = 0

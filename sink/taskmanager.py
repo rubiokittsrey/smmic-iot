@@ -18,9 +18,15 @@ from typing import Callable, Any, Dict
 # internal helpers, configs
 from utils import log_config, set_priority, priority, get_from_queue, SensorAlerts
 from settings import APPConfigurations, Topics, Broker
-import src.data.sysmonitor as sysmonitor
+from src.data import sysmonitor, aiosqlitedb
 
 _log = log_config(logging.getLogger(__name__))
+
+# queue constants
+_TSKMNGR_Q: multiprocessing.Queue
+_AIO_Q: multiprocessing.Queue
+_HARDWARE_Q: multiprocessing.Queue
+_AIOSQLITE_Q: multiprocessing.Queue
 
 # unimplemented priority class for tasks
 # not sure how to implement this yet
@@ -47,7 +53,7 @@ async def _dev_test_task(data: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def _delegator(semaphore: asyncio.Semaphore, data: Dict, aio_queue: multiprocessing.Queue, hardware_queue: multiprocessing.Queue) -> Any:
+async def _delegator(semaphore: asyncio.Semaphore, data: Dict) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aio_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}']
     # topics that need to be handled by the hardware module
@@ -59,12 +65,15 @@ async def _delegator(semaphore: asyncio.Semaphore, data: Dict, aio_queue: multip
         if data['topic'] in test_topics:
             await _dev_test_task(data)
 
+        if data['topic'].count('data') > 0:
+            _to_queue(_AIOSQLITE_Q, data)
+
         if data['topic'] in aio_queue_topics:
-            _to_queue(aio_queue, data)
+            _to_queue(_AIO_Q, data)
                 # TODO: refactor to implement proper return value
 
         if data['topic'] in hardware_queue_topics:
-            _to_queue(hardware_queue, data)
+            _to_queue(_HARDWARE_Q, data)
     
         # sensor alert handling
         if data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}':
@@ -78,7 +87,7 @@ async def _delegator(semaphore: asyncio.Semaphore, data: Dict, aio_queue: multip
                 pass
             
             if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                _se_disconn_handler(alert_mapped, hardware_queue)
+                _se_disconn_handler(alert_mapped, _HARDWARE_Q)
 
 # args:
 # data - mapped alert data from mqtt message
@@ -91,7 +100,7 @@ def _se_disconn_handler(data: Dict, hardware_queue: multiprocessing.Queue) -> bo
     }
     try:
         hardware_queue.put(se_disconnect)
-        return True 
+        return True
     except Exception as e:
         _log.error(f"Failed to put message to queue at PID {os.getpid()} ({__name__}): {str(e)}")
         return False
@@ -132,14 +141,21 @@ async def start(
         _log.error(f"{PRETTY_ALIAS} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
+    global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q
+    _TSKMNGR_Q = tskmngr_q
+    _AIO_Q = aiohttpclient_q
+    _HARDWARE_Q = hardware_q
+    _AIOSQLITE_Q = multiprocessing.Queue()
+
     if loop:
         _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
+            asyncio.create_task(aiosqlitedb.start(_AIOSQLITE_Q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    task = await loop.run_in_executor(pool, get_from_queue, tskmngr_q, __name__)
+                    task = await loop.run_in_executor(pool, get_from_queue, _TSKMNGR_Q, __name__)
 
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
@@ -154,7 +170,7 @@ async def start(
                             _log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
-                        asyncio.create_task(_delegator(semaphore=semaphore, data=task, aio_queue=aiohttpclient_q, hardware_queue=hardware_q))
+                        asyncio.create_task(_delegator(semaphore=semaphore, data=task))
 
                     await asyncio.sleep(0.05)
                     

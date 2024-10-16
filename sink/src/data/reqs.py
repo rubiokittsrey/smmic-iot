@@ -70,7 +70,7 @@ def _req(func: Callable) -> Any:
         if len(err) == retries:
             _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
         else:
-            _log.info(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s): {res_body}")
+            _log.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
         
         return res_stat, res_body
     

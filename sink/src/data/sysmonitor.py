@@ -51,6 +51,7 @@ async def _update_values(topic : str, value : int) -> None:
 
     return
 
+# retrieval from sys queue
 def _from_sys_queue(queue: multiprocessing.Queue) -> dict | None:
     msg: dict | None = None
 
@@ -150,7 +151,7 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
         _log.info(f"{__name__} coroutine active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
-            # to do handle task cancellation of this
+            # TODO: handle task cancellation of this
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
                 asyncio.create_task(_put_to_queue(tskmngr_queue))
@@ -163,16 +164,7 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
                             asyncio.create_task(_update_values(topic=msg['topic'], value=int(msg['payload'])))
 
                         await asyncio.sleep(0.05)
-
-                except KeyboardInterrupt:
+                except (asyncio.CancelledError, KeyboardInterrupt):
                     raise
-                    #await asyncio.gather(*_coroutines)
-                    #await cancel_tasks(_coroutines)
-
-                except asyncio.CancelledError:
-                    raise
-                    #await asyncio.gather(*_coroutines)
-
         except KeyboardInterrupt or asyncio.CancelledError:
-
             raise
