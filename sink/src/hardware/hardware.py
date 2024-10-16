@@ -29,6 +29,9 @@ def irrigation_callback(signal : int) -> None:
     global __IRRIGATION_SIGNAL__
     __IRRIGATION_SIGNAL__ = signal
 
+
+# lazy implementation, straight to irrigation module
+# TODO: rework this when there are more hardware tasks added to project
 async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     async with semaphore:
         task_keys : List = list(task.keys())
@@ -56,13 +59,18 @@ async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Qu
         _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
 
         try:
-            asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
+            try:
+                asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
+            except NameError as e:
+                _log.info(f'{PRETTY_ALIAS} starting with irrigation module disabled')
             with ThreadPoolExecutor() as pool:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)
                     if task:
+                        if task['topic'].count('irrigation') > 0 and APPConfigurations.DISABLE_IRRIGATION:
+                            continue
                         asyncio.create_task(_delegator(semaphore, task))
-        except KeyboardInterrupt:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             raise
         except Exception as e:
             _log.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")

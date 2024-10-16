@@ -20,7 +20,7 @@ from typing import Tuple, List, Callable
 import taskmanager
 from src.hardware import hardware, network
 from src.mqtt import service, client
-from src.data import aiohttpclient
+from src.data import aiohttpclient, sysmonitor
 
 # internal helpers, configs
 from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
@@ -64,7 +64,7 @@ def run_sub_p(*args, **kwargs):
         # cleanup
         try:
             loop.run_until_complete(proc_t)
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             pass
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
@@ -129,15 +129,20 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # sub-second delay ensure that all sub-processes are already spawned before starting the callback_client coroutine of this process
         await asyncio.sleep(0.5)
 
+        # main process co-routines
+        tasks = []
+
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
         handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
-        callback_client_task = asyncio.create_task(client.start_client(handler.msg_callback))
+        tasks.append(asyncio.create_task(client.start_client(handler.msg_callback)))
+        # start the system monitor queue
+        tasks.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, tskmngr_queue=task_queue)))
 
         # shutdown and cleanup
         try:
-            await asyncio.gather(callback_client_task)
+            await asyncio.gather(*tasks)
         except (asyncio.CancelledError, KeyboardInterrupt):
             _log.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
 
@@ -149,8 +154,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
             for proc in processes:
                 proc.join()
 
-            await asyncio.gather(client.shutdown_client(), callback_client_task)
-
+            await asyncio.gather(client.shutdown_client(), *tasks)
             raise
 
         # keep main thread alive

@@ -130,7 +130,7 @@ async def start(aiohttpclient_q: multiprocessing.Queue, tskmngr_q: multiprocessi
                         #_log.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
                         asyncio.create_task(_router(semaphore, item, client))
 
-        except KeyboardInterrupt or asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             # close the aiohttp session client
             await client.close()
             raise

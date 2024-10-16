@@ -136,8 +136,6 @@ async def start(
         _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            # start the sysmonitor coroutine
-            sysmonitor_t = loop.create_task(sysmonitor.start(sys_queue=sysmonitor_q, tskmngr_queue=tskmngr_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
@@ -161,9 +159,4 @@ async def start(
                     await asyncio.sleep(0.05)
                     
         except (KeyboardInterrupt, asyncio.CancelledError):
-            sysmonitor_t.cancel()
-            try:
-                loop.run_until_complete(sysmonitor_t)
-            except asyncio.CancelledError:
-                pass
             raise
