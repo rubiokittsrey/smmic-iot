@@ -29,7 +29,6 @@ def irrigation_callback(signal : int) -> None:
     global __IRRIGATION_SIGNAL__
     __IRRIGATION_SIGNAL__ = signal
 
-
 # lazy implementation, straight to irrigation module
 # TODO: rework this when there are more hardware tasks added to project
 async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:

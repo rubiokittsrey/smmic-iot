@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging as _logging
 import settings
 import os
@@ -209,7 +211,7 @@ def is_num(var) -> type[float | int] | None:
 
     return _type
 
-# maps the payload from the device reading into a dictionary
+# maps the payload from sensor devices
 # assuming that the shape of the payload (as a string) is:
 # -------
 # sensor_type;
@@ -221,50 +223,93 @@ def is_num(var) -> type[float | int] | None:
 # reading:value&
 # ...
 # -------
-def map_sensor_payload(payload: str) -> Dict:
-    final: Dict = {}
+class SensorData:
+    def __init__(self, sensor_type, device_id, timestamp, data_obj, raw_payload):
+        self.sensor_type = sensor_type
+        self.device_id = device_id
+        self.timestamp = timestamp
+        self.data = data_obj
+        self.payload = raw_payload
 
-    # parse the contents of the payload string
-    outer_split : List[str] = payload.split(";")
-    final.update({
-        'SensorType': outer_split[0],
-        'Sensor_Node': outer_split[1],
-        'timestamp': outer_split[2],
-    })
+    # soil moisture sensor type
+    class SoilMoistureSensor:
+        def __init__(self, soil_moisture, humidity, temperature, battery_level):
+            self.soil_moisture = soil_moisture
+            self.humidity = humidity
+            self.temperature = temperature
+            self.battery_level = battery_level
 
-    # parse the data from the 3rd index of the payload split
-    data : List[str] = outer_split[3].split("&")
+    @staticmethod
+    def map_sensor_payload(payload: str) -> Dict:
+        final: Dict = {}
 
-    # remove empty strings in the list
-    for i in range(data.count("")):
-        data.remove("")
+        # parse the contents of the payload string
+        outer_split : List[str] = payload.split(";")
+        final.update({
+            'SensorType': outer_split[0],
+            'Sensor_Node': outer_split[1],
+            'timestamp': outer_split[2],
+        })
 
-    for value in data:
-        # split the key and value of the value string
-        x = value.split(":")
-        # check the value for a valid num type (int or float)
-        _num_check = is_num(x[1])
+        # parse the data from the 3rd index of the payload split
+        data : List[str] = outer_split[3].split("&")
 
-        if not _num_check:
-            final.update({x[0]: x[1]})
-        else:
-            final.update({x[0]: _num_check(x[1])})
+        # remove empty strings in the list
+        for i in range(data.count("")):
+            data.remove("")
 
-    # if outer_split[0] == 'sensor_type':
-    #     data : List = outer_split[3].split(":")
-    #     final.update([
-    #         ('sensor_type',outer_split[0]),
-    #         ('Sensor_Node', outer_split[1]),
-    #         ('timestamp', outer_split[2]),
-    #         ('soil_moisture', data[0]),
-    #         ('humidity', data[1]),
-    #         ('temperature', data[2]),
-    #         ('battery_level', data[3]),
-    #     ])
+        for value in data:
+            # split the key and value of the value string
+            x = value.split(":")
+            # check the value for a valid num type (int or float)
+            _num_check = is_num(x[1])
 
-    return final
+            if not _num_check:
+                final.update({x[0]: x[1]})
+            else:
+                final.update({x[0]: _num_check(x[1])})
 
-# maps the payload from the sink data into a dictionary
+        # if outer_split[0] == 'sensor_type':
+        #     data : List = outer_split[3].split(":")
+        #     final.update([
+        #         ('sensor_type',outer_split[0]),
+        #         ('Sensor_Node', outer_split[1]),
+        #         ('timestamp', outer_split[2]),
+        #         ('soil_moisture', data[0]),
+        #         ('humidity', data[1]),
+        #         ('temperature', data[2]),
+        #         ('battery_level', data[3]),
+        #     ])
+
+        return final
+
+    @classmethod
+    def from_payload(cls, payload: str) -> SensorData:
+        b_map = SensorData.map_sensor_payload(payload)
+        b_map.update({'raw_payload': payload})
+
+        readings = None
+        if b_map['SensorType'] == 'soil_moisture':
+            readings = SensorData.SoilMoistureSensor(
+                soil_moisture=b_map['soil_moisture'],
+                humidity=b_map['humidity'],
+                temperature=b_map['temperature'],
+                battery_level=b_map['battery_level']
+            )
+            b_map.update({'data_obj': readings})
+        
+        f_map = {
+            'sensor_type': b_map['SensorType'],
+            'device_id': b_map['Sensor_Node'],
+            'raw_payload': b_map['raw_payload'],
+            'data_obj': b_map['data_obj'],
+            'timestamp': b_map['timestamp']
+        }
+
+        _self = cls(**f_map)
+        return _self
+
+# maps the payload from the sink data
 # assuming that the shape of the payload (as a string) is:
 # ------
 # device_id;
@@ -275,33 +320,66 @@ def map_sensor_payload(payload: str) -> Dict:
 # key:value&
 # ..........
 # ------
-def map_sink_payload(payload: str) -> Dict:
-    final: Dict = {}
+class SinkData:
+    # connected clients, connected total, sub count
+    # bytes sent, bytes received, messages sent, messages received
+    def __init__(self,
+                 raw_payload,
+                 timestamp,
+                 connected_clients,
+                 connected_total,
+                 sub_count,
+                 bytes_sent,
+                 bytes_received,
+                 messages_sent,
+                 messages_received,
+                 battery_level,
+                 ):
+        self.raw_payload = raw_payload
+        self.timestamp = timestamp
+        self.connected_clients = connected_clients
+        self.connected_total = connected_total
+        self.sub_count = sub_count
+        self.bytes_sent = bytes_sent
+        self.bytes_received = bytes_received
+        self.messages_sent = messages_sent
+        self.messages_received = messages_received
+        self.battery_level = battery_level
 
-    outer_split: List[str] = payload.split(';')
-    final.update({
-        'Sink_Node': outer_split[0],
-        'timestamp': outer_split[1]
-    })
+    @staticmethod
+    def map_sink_payload(payload: str) -> Dict:
+        final: Dict = {}
 
-    data: List[str] = outer_split[2].split("&")
+        outer_split: List[str] = payload.split(';')
+        final.update({
+            'Sink_Node': outer_split[0],
+            'timestamp': outer_split[1],
+            'raw_payload': payload
+        })
 
-    # remove empty strings in the list
-    for i in range(data.count("")):
-        data.remove("")
+        data: List[str] = outer_split[2].split("&")
 
-    for value in data:
-        # split the key and value of the value string
-        x = value.split(":")
-        # check the value for a valid num type (int or float)
-        _num_check = is_num(x[1])
+        # remove empty strings in the list
+        for i in range(data.count("")):
+            data.remove("")
 
-        if not _num_check:
-            final.update({x[0]: x[1]})
-        else:
-            final.update({x[0]: _num_check(x[1])})
+        for value in data:
+            # split the key and value of the value string
+            x = value.split(":")
+            # check the value for a valid num type (int or float)
+            _num_check = is_num(x[1])
 
-    return final
+            if not _num_check:
+                final.update({x[0]: x[1]})
+            else:
+                final.update({x[0]: _num_check(x[1])})
+        print(final)
+        return final
+
+    # TODO: properly implement this function
+    @classmethod
+    def from_payload(cls, payload: str) -> SinkData:
+        return cls(kwargs=SinkData.map_sink_payload(payload))
 
 class SensorAlerts:
     # connection

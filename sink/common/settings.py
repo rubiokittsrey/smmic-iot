@@ -130,6 +130,7 @@ class Topics:
     SYS_SUB_COUNT : str = __var_from_env__("BROKER_SUBSCRIPTIONS_COUNT")
     IRRIGATION : str = __var_from_env__("IRRIGATION_TOPIC")
 
+    @staticmethod
     def get_topics() -> Tuple[List[str], List[str]]:
         _topics: List[str] = []
         _sys_topics: List[str] = []

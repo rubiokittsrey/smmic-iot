@@ -40,7 +40,7 @@ class _SensorDevice(models.Model):
         return f''
 
 class _SensorData(models.Model):
-    device = fields.ForeignKeyField(
+    device_id = fields.ForeignKeyField(
         "models.SensorDevice",
         related_name="sensor_data",
         on_delete=fields.CASCADE
