@@ -148,7 +148,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
 
             for proc in processes:
                 proc.terminate()
-            
+
             # short wait to ensure proc termination
             await asyncio.sleep(0.5)
             for proc in processes:

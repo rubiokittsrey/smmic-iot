@@ -3,11 +3,11 @@
 # TODO: documentation
 
 # third-party
+import os
 import subprocess
 import multiprocessing
 import asyncio
 import logging
-import os
 from datetime import datetime
 from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
@@ -18,34 +18,32 @@ from settings import APPConfigurations, Topics
 
 _log = log_config(logging.getLogger(__name__))
 
-__CONNECTED_CLIENTS__ : int = 0
-__CLIENTS_TOTAL__ : int = 0
-__SUB_COUNT__ : int = 0
-__BYTES_SENT__ : int = 0
-__BYTES_RECEIVED__ : int = 0
-__MESSAGES_SENT__ : int = 0
-__MESSAGES_RECEIVED__ : int = 0
-# __FREE_MEMORY__ : int = 0
-
-__, __sys_topics__ = Topics.get_topics()
+_CONNECTED_CLIENTS : int = 0
+_CLIENTS_TOTAL : int = 0
+_SUB_COUNT : int = 0
+_BYTES_SENT : int = 0
+_BYTES_RECEIVED : int = 0
+_MESSAGES_SENT : int = 0
+_MESSAGES_RECEIVED : int = 0
+# _FREE_MEMORY : int = 0
 
 async def _update_values(topic : str, value : int) -> None:
-    global __CONNECTED_CLIENTS__, __CLIENTS_TOTAL__, __SUB_COUNT__, __BYTES_SENT__, __BYTES_RECEIVED__, __MESSAGES_SENT__, __MESSAGES_RECEIVED__
+    global _CONNECTED_CLIENTS, _CLIENTS_TOTAL, _SUB_COUNT, _BYTES_SENT, _BYTES_RECEIVED, _MESSAGES_SENT, _MESSAGES_RECEIVED
 
     if topic == Topics.SYS_CLIENTS_CONNECTED:
-        __CONNECTED_CLIENTS__ = value
+        _CONNECTED_CLIENTS = value
     elif topic == Topics.SYS_CLIENTS_TOTAL:
-        __CLIENTS_TOTAL__ = value
+        _CLIENTS_TOTAL = value
     elif topic == Topics.SYS_SUB_COUNT:
-        __SUB_COUNT__ = value
+        _SUB_COUNT = value
     elif topic == Topics.SYS_BYTES_SENT:
-        __BYTES_SENT__ = value
+        _BYTES_SENT = value
     elif topic == Topics.SYS_BYTES_RECEIVED:
-        __BYTES_RECEIVED__ = value
+        _BYTES_RECEIVED = value
     elif topic == Topics.SYS_MESSAGES_SENT:
-        __MESSAGES_SENT__ = value
+        _MESSAGES_SENT = value
     elif topic == Topics.SYS_MESSAGES_RECEIVED:
-        __MESSAGES_RECEIVED__ = value
+        _MESSAGES_RECEIVED = value
     else:
         _log.warning(f"Cannot assert $SYS topic of value @ sysmonitor: {topic}")
 
@@ -73,13 +71,13 @@ async def _put_to_queue(queue: multiprocessing.Queue):
         while True:
             await asyncio.sleep(300) # execute every 5 minutes
             _d = [
-                    f'connected_clients:{__CONNECTED_CLIENTS__}',
-                    f'total_clients:{__CLIENTS_TOTAL__}',
-                    f'sub_count:{__SUB_COUNT__}',
-                    f'bytes_sent:{__BYTES_SENT__}',
-                    f'bytes_received:{__BYTES_RECEIVED__}',
-                    f'messages_sent:{__MESSAGES_SENT__}',
-                    f'messages_received:{__MESSAGES_RECEIVED__}',
+                    f'connected_clients:{_CONNECTED_CLIENTS}',
+                    f'total_clients:{_CLIENTS_TOTAL}',
+                    f'sub_count:{_SUB_COUNT}',
+                    f'bytes_sent:{_BYTES_SENT}',
+                    f'bytes_received:{_BYTES_RECEIVED}',
+                    f'messages_sent:{_MESSAGES_SENT}',
+                    f'messages_received:{_MESSAGES_RECEIVED}',
                     f'battery_level:{00}'
                 ]
             data : str = ''

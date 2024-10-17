@@ -151,7 +151,7 @@ async def start(
         _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            asyncio.create_task(aiosqlitedb.start(_AIOSQLITE_Q))
+            aiosqlitedb_t = asyncio.create_task(aiosqlitedb.start(_AIOSQLITE_Q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
@@ -175,4 +175,6 @@ async def start(
                     await asyncio.sleep(0.05)
                     
         except (KeyboardInterrupt, asyncio.CancelledError):
+            # enable await of aiosqlitedb_t
+            loop.run_until_complete(aiosqlitedb_t)
             raise
