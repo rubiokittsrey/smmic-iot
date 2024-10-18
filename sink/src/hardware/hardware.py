@@ -70,6 +70,6 @@ async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Qu
                             continue
                         asyncio.create_task(_delegator(semaphore, task))
         except (asyncio.CancelledError, KeyboardInterrupt):
-            raise
+            pass
         except Exception as e:
             _log.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")

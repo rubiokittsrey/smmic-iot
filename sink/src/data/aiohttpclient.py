@@ -133,4 +133,3 @@ async def start(aiohttpclient_q: multiprocessing.Queue, tskmngr_q: multiprocessi
         except (asyncio.CancelledError, KeyboardInterrupt):
             # close the aiohttp session client
             await client.close()
-            raise

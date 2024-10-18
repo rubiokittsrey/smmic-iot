@@ -37,7 +37,7 @@ def _init_client() -> paho_mqtt.Client | None:
 
 # internal callback functions
 def _on_connected(client:paho_mqtt.Client, userData, flags, rc, properties) -> None:
-    _log.debug(f"Callback client connected to broker @ {Broker.HOST}:{Broker.PORT}")
+    _log.debug(f"Callback client connected to broker at {Broker.HOST}:{Broker.PORT}")
 
 def _on_disconnected(client: paho_mqtt.Client,
                         userData: Any,
@@ -125,7 +125,7 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
             time.sleep(timeout)
 
         if attempts == 0:
-            _log.critical(f"Callback client was unable to successfully connect with broker @ {Broker.HOST}:{Broker.PORT}, max attempts allowed reached!")
+            _log.critical(f"Callback client was unable to successfully connect with broker at {Broker.HOST}:{Broker.PORT}, max attempts allowed reached!")
             _CLIENT_STAT = status.FAILED
 
         if _CLIENT_STAT == status.CONNECTED:
@@ -155,7 +155,7 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
 
     con = await _connect_loop(_client, _msg_handler)
     if con:
-        _log.info(f"Callback client running and connected @ PID: {os.getpid()}")
+        _log.info(f"Callback client running and connected at PID: {os.getpid()}")
 
     # keep this client thread alive
     while True:
@@ -182,13 +182,13 @@ async def shutdown_client() -> bool:
 
     if _CLIENT_STAT == status.CONNECTED:
         try:
-            _log.debug(f"Disconnecting callback client {APPConfigurations.CLIENT_ID} from broker @ {Broker.HOST, Broker.PORT}")
+            _log.debug(f"Disconnecting callback client {APPConfigurations.CLIENT_ID} from broker at {Broker.HOST, Broker.PORT}")
             _CALLBACK_CLIENT.disconnect()
         except Exception as e:
             _log.error(f"Unable to disconnect client: {e}, forcing disconnect")
         
         try:
-            _log.debug(f"Terminating callback client loop @ PID: {os.getpid()}")
+            _log.debug(f"Terminating callback client loop at PID: {os.getpid()}")
             _CALLBACK_CLIENT.loop_stop()
         except Exception as e:
             _log.error(f"Unable to stop client loop: {e}, forcing task termination by exiting process (os._exit(0))")

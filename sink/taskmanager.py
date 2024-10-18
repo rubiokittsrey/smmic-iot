@@ -177,4 +177,3 @@ async def start(
         except (KeyboardInterrupt, asyncio.CancelledError):
             # enable await of aiosqlitedb_t
             loop.run_until_complete(aiosqlitedb_t)
-            raise

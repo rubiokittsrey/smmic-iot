@@ -14,9 +14,58 @@ from typing import Any
 
 # internal helpers, configurations
 from settings import APPConfigurations, Topics, Broker
-from utils import log_config, get_from_queue, SinkData, SensorData
+from utils import log_config, get_from_queue, SinkData, SensorData, status
 
 _logs = log_config(logging.getLogger(__name__))
+
+_DATABASE = f"{APPConfigurations.LOCAL_STORAGE_DIR}local.db"
+
+# create table commands
+_sk_data_t = """
+    CREATE TABLE IF NOT EXISTS SinkData (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        battery_level DECIMAL(5, 2) NOT NULL,
+        connected_clients INTEGER NOT NULL,
+        total_clients INTEGER NOT NULL,
+        sub_count INTEGER NOT NULL,
+        bytes_sent INTEGER NOT NULL,
+        bytes_received INTEGER NOT NULL,
+        messages_sent INTEGER NOT NULL,
+        messages_received INTEGER NOT NULL,
+        payload TEXT NOT NULL
+    ) """
+
+_se_device_t = """
+    CREATE TABLE IF NOT EXISTS SensorDevice (
+        device_id VARCHAR(100) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        latitude DECIMAL(9, 6) NOT NULL,
+        longitude DECIMAL(9, 6) NOT NULL,
+        lastsync TEXT NOT NULL
+    ) """
+
+_se_data_t = """
+    CREATE TABLE IF NOT EXISTS SensorData (
+        device_id VARCHAR(100) NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        battery_level DECIMAL(5, 2) NOT NULL,
+        timestamp TEXT NOT NULL,
+        soil_moisture DECIMAL(5, 2) NOT NULL,
+        temperature DECIMAL(5, 2) NOT NULL,
+        humidity DECIMAL(5, 2) NOT NULL,
+        payload TEXT NOT NULL,
+        CONSTRAINT fk_device FOREIGN KEY (device_id) REFERENCES SensorDevice (device_id) ON DELETE CASCADE
+    ) """
+
+_unsynced_t = """
+    CREATE TABLE IF NOT EXISTS UnsyncedData (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic VARCHAR(50) NOT NULL,
+        origin TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        payload TEXT NOT NULL
+    ) """
 
 # sql writer
 def _composer(data: Any) -> str:
@@ -49,6 +98,39 @@ async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock,
             pass
             # TODO: implement read
 
+# generates / checks schemas
+# if successful, return status.SUCCESS
+async def init() -> int:
+    init_stat = status.UNVERIFIED
+
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _logs.error(f"Unable to get running event loop {os.getpid()} ({__name__}): {str(e)}")
+
+    # generate schemas
+    try:
+        async with aiosqlite.connect(_DATABASE) as db:
+            # sink data table
+            await db.execute(_sk_data_t)
+            await db.commit()
+            # sensor device table
+            await db.execute(_se_device_t)
+            await db.commit()
+            # sensor data table
+            await db.execute(_se_data_t)
+            await db.commit()
+            # unsyced data table
+            await db.execute(_unsynced_t)
+            await db.commit()
+            init_stat = status.SUCCESS
+            _logs.debug(f"Database initialization successful ({init.__name__})")
+    except aiosqlite.Error as e:
+        init_stat = status.FAILED
+        _logs.error(f"Database init at {init.__name__} raised error: {str(e)}")
+
+    return init_stat
+
 #
 async def start(queue: multiprocessing.Queue) -> None:
     try:
@@ -65,7 +147,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         flag = False
         with ThreadPoolExecutor() as pool:
 
-            async with aiosqlite.connect('storage/local.db') as db:
+            async with aiosqlite.connect(_DATABASE) as db:
 
                 # write-ahead logging
                 await db.execute("PRAGMA journal_mode=WAL;")
@@ -74,7 +156,7 @@ async def start(queue: multiprocessing.Queue) -> None:
                 while True:
 
                     if not flag:
-                        _logs.info(f"{__name__} coroutine active at PID {os.getpid()}")
+                        _logs.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
                         flag = not flag
 
                     try:

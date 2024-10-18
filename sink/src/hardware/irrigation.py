@@ -109,7 +109,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
     
     if loop:
-        _log.info(f"{__name__} submodule active @ PID {os.getpid()}")
+        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active @ PID {os.getpid()}")
 
         asyncio.create_task(_watcher(loop, queue))
         try:

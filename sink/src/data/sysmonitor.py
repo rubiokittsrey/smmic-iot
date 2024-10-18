@@ -146,7 +146,7 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
         return
 
     if loop:
-        _log.info(f"{__name__} coroutine active at PID {os.getpid()}")
+        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
             # TODO: handle task cancellation of this

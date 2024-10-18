@@ -20,7 +20,7 @@ from typing import Tuple, List, Callable
 import taskmanager
 from src.hardware import hardware, network
 from src.mqtt import service, client
-from src.data import aiohttpclient, sysmonitor
+from src.data import aiohttpclient, sysmonitor, aiosqlitedb
 
 # internal helpers, configs
 from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
@@ -66,6 +66,11 @@ def run_sub_p(*args, **kwargs):
             loop.run_until_complete(proc_t)
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
+        except RuntimeError as e:
+            if str(e) == 'This event loop is already running':
+                pass
+            else:
+                _log.error(f"Unhandled RuntimeError raised at {run_sub_p.__name__}: {str(e)}")
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
         raise
@@ -210,6 +215,7 @@ def sys_check() -> Tuple[int, int | None]:
     # NOTE: that if the api status is unsuccessful the system should still operate under limited functionalities
     # i.e. store data locally (and only until uploaded to api)
     api_status: int | None = None
+    # the local storage status
 
     _log.info(f"Performing core system checks")
 
@@ -235,7 +241,6 @@ def sys_check() -> Tuple[int, int | None]:
         # check api connection and health
         # if the check fails, implement no api connection protocol
         # TODO: create no connection to api system protocols
-
         loop: asyncio.AbstractEventLoop | None = None
         try:
             loop = asyncio.new_event_loop()
@@ -245,11 +250,17 @@ def sys_check() -> Tuple[int, int | None]:
             os._exit(0)
 
         if loop:
-            api_status = loop.run_until_complete(aiohttpclient.api_check())
+            # local storage as part of core status
+            storage_status = loop.run_until_complete(aiosqlitedb.init())
+            if storage_status != status.SUCCESS:
+                core_status = status.FAILED
+            else:
+                api_status = loop.run_until_complete(aiohttpclient.api_check())
 
     else:
         _log.critical('Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED
+
 
     return core_status, api_status
 

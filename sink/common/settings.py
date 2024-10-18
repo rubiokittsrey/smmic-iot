@@ -9,11 +9,11 @@ from typing import Tuple, List, Any
 # get configurations from settings.yaml
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 with open(spath, 'r') as sfile:
-    settings_yaml = yaml.safe_load(sfile)
-__app_net_configs__ = settings_yaml["app_configurations"]["network"] # the application network configurations
-__test_configs__ = settings_yaml["app_configurations"]["tests"] # testing configurations
-__dev_configs__ = settings_yaml["dev_configs"]
-__hardware_configs__ = settings_yaml["hardware_configurations"]
+    _settings_yaml = yaml.safe_load(sfile)
+_app_net_configs = _settings_yaml["app_configurations"]["network"] # the application network configurations
+_test_configs = _settings_yaml["app_configurations"]["tests"] # testing configurations
+_dev_configs = _settings_yaml["dev_configs"]
+_hardware_configs = _settings_yaml["hardware_configurations"]
 
 # load the .env variables
 envpath = os.path.join(os.path.dirname(__file__), '../.env')
@@ -27,7 +27,7 @@ def __var_from_env__(key: str) -> Any:
 
 # global vars
 LOGGING_LEVEL = logging.DEBUG
-ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
+ENABLE_LOG_TO_FILE =  _dev_configs["enable_log_to_file"]
 _DEV_MODE = False
 
 def set_logging_level(level: int) -> None:
@@ -55,38 +55,42 @@ DEV_MODE = __get_dev_mode__()
 
 # application configurations 
 class APPConfigurations:
-    GLOBAL_SEMAPHORE_COUNT : int = settings_yaml["app_configurations"]["global_semaphore_count"]
+    GLOBAL_SEMAPHORE_COUNT : int = _settings_yaml["app_configurations"]["global_semaphore_count"]
 
-    MQTT_PW : str = settings_yaml["app_configurations"]["mqtt_pwd"]
-    MQTT_USERNAME : str = settings_yaml["app_configurations"]["mqtt_username"]
+    MQTT_PW : str = _settings_yaml["app_configurations"]["mqtt_pwd"]
+    MQTT_USERNAME : str = _settings_yaml["app_configurations"]["mqtt_username"]
 
-    CLIENT_ID : str = settings_yaml["app_configurations"]["client_id"]
-    PRIMARY_NET_INTERFACE : str = __app_net_configs__["primary_interface"]
-    SRC_PATH : str = __test_configs__["src_path"]
-    GATEWAY : str = __app_net_configs__["gateway"]
-    NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
-    NETWORK_TIMEOUT : int = __app_net_configs__["timeout"]
-    NETWORK_MAX_TIMEOUT_RETRIES : int = __app_net_configs__["max_connection_timeouts"]
+    CLIENT_ID : str = _settings_yaml["app_configurations"]["client_id"]
+    PRIMARY_NET_INTERFACE : str = _app_net_configs["primary_interface"]
+    SRC_PATH : str = _test_configs["src_path"]
+    GATEWAY : str = _app_net_configs["gateway"]
+    NET_CHECK_INTERVALS = _app_net_configs["network_check_intervals"] * 60
+    NETWORK_TIMEOUT : int = _app_net_configs["timeout"]
+    NETWORK_MAX_TIMEOUT_RETRIES : int = _app_net_configs["max_connection_timeouts"]
+
+    # local storage
+    LOCAL_STORAGE_DIR : str = _settings_yaml["app_configurations"]["local_storage"]["directory"]
 
     #logging
-    LOG_FILE_DIRECTORY : str = __dev_configs__["log_file_directory"]
-    LOG_FILE_NAME : str = __dev_configs__["log_file_name"]
+    LOG_FILE_DIRECTORY : str = _dev_configs["log_file_directory"]
+    LOG_FILE_NAME : str = _dev_configs["log_file_name"]
 
-    def __disable_irr__() -> bool | None:
+    @staticmethod
+    def _disable_irr() -> bool | None:
         val: bool | None = None
         try:
-            val = settings_yaml["app_configurations"]["disable_irrigation"]
+            val = _settings_yaml["app_configurations"]["disable_irrigation"]
         except KeyError:
             pass
         return val
 
-    DISABLE_IRRIGATION: bool | None = __disable_irr__()
+    DISABLE_IRRIGATION: bool | None = _disable_irr()
 
 # api base url, enpoints
 class APIRoutes:
     BASE_URL : str = __var_from_env__("API_URL")
     TEST_URL : str = __var_from_env__("API_TEST_URL")
-    HEADERS : str = settings_yaml["headers"]
+    HEADERS : str = _settings_yaml["headers"]
     HEALTH : str = __var_from_env__("HEALTH_CHECK_URL")
 
     # sink endpoints
@@ -111,7 +115,7 @@ class DevTopics:
     TEST = "/dev/test"
 
 class Channels:
-    IRRIGATION = __hardware_configs__["irrigation_channel"]
+    IRRIGATION = _hardware_configs["irrigation_channel"]
 
 # mqtt functional topics
 class Topics:
