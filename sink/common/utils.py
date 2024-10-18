@@ -229,7 +229,7 @@ class SensorData:
         self.device_id = device_id
         self.timestamp = timestamp
         self.data = data_obj
-        self.payload = raw_payload
+        self.raw_payload = raw_payload
 
     # soil moisture sensor type
     class SoilMoistureSensor:
@@ -249,6 +249,7 @@ class SensorData:
             'SensorType': outer_split[0],
             'Sensor_Node': outer_split[1],
             'timestamp': outer_split[2],
+            'raw_payload': payload
         })
 
         # parse the data from the 3rd index of the payload split
@@ -286,7 +287,6 @@ class SensorData:
     @classmethod
     def from_payload(cls, payload: str) -> SensorData:
         b_map = SensorData.map_sensor_payload(payload)
-        b_map.update({'raw_payload': payload})
 
         readings = None
         if b_map['SensorType'] == 'soil_moisture':
@@ -327,18 +327,20 @@ class SinkData:
                  raw_payload,
                  timestamp,
                  connected_clients,
-                 connected_total,
+                 total_clients,
                  sub_count,
                  bytes_sent,
                  bytes_received,
                  messages_sent,
                  messages_received,
                  battery_level,
+                 device_id
                  ):
+        self.device_id = device_id
         self.raw_payload = raw_payload
         self.timestamp = timestamp
         self.connected_clients = connected_clients
-        self.connected_total = connected_total
+        self.total_clients = total_clients
         self.sub_count = sub_count
         self.bytes_sent = bytes_sent
         self.bytes_received = bytes_received
@@ -348,6 +350,19 @@ class SinkData:
 
     @staticmethod
     def map_sink_payload(payload: str) -> Dict:
+        # keys --> (as of oct 18, 2024)
+        # raw_payload: the (unmapped) string payload
+        # Sink_Node: the sink node device id,
+        # timestamp: timestamp of the payload, not when it was received,
+        # connected_clients: currently connected clients,
+        # total_clients: disconnected and connected clients,
+        # sub_count: total subscription count of the entire mqtt network kept track by the broker,
+        # bytes_sent,
+        # bytes_received,
+        # messages_sent,
+        # messages_received,
+        # battery_level
+
         final: Dict = {}
 
         outer_split: List[str] = payload.split(';')
@@ -373,13 +388,23 @@ class SinkData:
                 final.update({x[0]: x[1]})
             else:
                 final.update({x[0]: _num_check(x[1])})
-        print(final)
+
         return final
 
     # TODO: properly implement this function
     @classmethod
     def from_payload(cls, payload: str) -> SinkData:
-        return cls(kwargs=SinkData.map_sink_payload(payload))
+        b_map = SinkData.map_sink_payload(payload)
+        b_map.update({'device_id': b_map['Sink_Node']})
+        del b_map['Sink_Node']
+
+        try:
+            _self = cls(**b_map)
+        except Exception as e:
+            print(str(e))
+
+        return _self
+        
 
 class SensorAlerts:
     # connection
@@ -444,6 +469,11 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
 class ExceptionsHandler:
 
     class event_loop:
+        
+        @staticmethod
+        def alrd_running(name: str, pid: int, err: str):
+            __log__.error(f"Loop is already running ({name} at PID {pid}): {err}")
+
         @staticmethod
         def unhandled(name: str, pid: int, err: str):
             __log__.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")

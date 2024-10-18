@@ -28,6 +28,8 @@ def _composer(data: Any) -> str:
     elif data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}':
         se_data = SensorData.from_payload(data['payload'])
 
+    return 'f'
+
 # sql executor
 async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, db_connection: aiosqlite.Connection, data: Any):
     if data['topic'].count('data') > 0:
