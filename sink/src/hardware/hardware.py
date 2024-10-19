@@ -66,10 +66,15 @@ async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Qu
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)
                     if task:
-                        if task['topic'].count('irrigation') > 0 and APPConfigurations.DISABLE_IRRIGATION:
-                            continue
+                        try:
+                            if task['topic'].count('irrigation') > 0 and APPConfigurations.DISABLE_IRRIGATION:
+                                continue
+                        # NOTE: this could present problmes in the future
+                        # if something fucks up, theres a good chance its here
+                        except KeyError:
+                            pass
                         asyncio.create_task(_delegator(semaphore, task))
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
         except Exception as e:
-            _log.error(f"Unhandled exception raised @ PID {os.getpid()} ({__name__}): {str(e)}")
+            _log.error(f"Unhandled exception raised at PID {os.getpid()} ({__name__}): {str(e)}")
