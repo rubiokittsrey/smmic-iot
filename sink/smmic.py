@@ -29,6 +29,7 @@ from utils import log_config, Modes, status, ExceptionsHandler # priority, set_p
 _log = log_config(logging.getLogger(__name__))
 
 # abstract function to run sub processes
+# TODO: fix KeyboardInterrupt handling for graceful termination
 def run_sub_p(*args, **kwargs):
     pretty_alias: str
     sub_p: Callable

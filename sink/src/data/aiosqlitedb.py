@@ -20,52 +20,54 @@ _logs = log_config(logging.getLogger(__name__))
 
 _DATABASE = f"{APPConfigurations.LOCAL_STORAGE_DIR}local.db"
 
-# create table commands
-_sk_data_t = """
-    CREATE TABLE IF NOT EXISTS SinkData (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT,
-        battery_level DECIMAL(5, 2) NOT NULL,
-        connected_clients INTEGER NOT NULL,
-        total_clients INTEGER NOT NULL,
-        sub_count INTEGER NOT NULL,
-        bytes_sent INTEGER NOT NULL,
-        bytes_received INTEGER NOT NULL,
-        messages_sent INTEGER NOT NULL,
-        messages_received INTEGER NOT NULL,
-        payload TEXT NOT NULL
-    ) """
+# schema tables
+class Tables:
+    
+    SinkData = """
+        CREATE TABLE IF NOT EXISTS SinkData (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            battery_level DECIMAL(5, 2) NOT NULL,
+            connected_clients INTEGER NOT NULL,
+            total_clients INTEGER NOT NULL,
+            sub_count INTEGER NOT NULL,
+            bytes_sent INTEGER NOT NULL,
+            bytes_received INTEGER NOT NULL,
+            messages_sent INTEGER NOT NULL,
+            messages_received INTEGER NOT NULL,
+            payload TEXT NOT NULL
+        ) """
 
-_se_device_t = """
-    CREATE TABLE IF NOT EXISTS SensorDevice (
-        device_id VARCHAR(100) PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        latitude DECIMAL(9, 6) NOT NULL,
-        longitude DECIMAL(9, 6) NOT NULL,
-        lastsync TEXT NOT NULL
-    ) """
+    SensorDevice = """
+        CREATE TABLE IF NOT EXISTS SensorDevice (
+            device_id VARCHAR(100) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            latitude DECIMAL(9, 6) NOT NULL,
+            longitude DECIMAL(9, 6) NOT NULL,
+            lastsync TEXT NOT NULL
+        ) """
 
-_se_data_t = """
-    CREATE TABLE IF NOT EXISTS SensorData (
-        device_id VARCHAR(100) NOT NULL,
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        battery_level DECIMAL(5, 2) NOT NULL,
-        timestamp TEXT NOT NULL,
-        soil_moisture DECIMAL(5, 2) NOT NULL,
-        temperature DECIMAL(5, 2) NOT NULL,
-        humidity DECIMAL(5, 2) NOT NULL,
-        payload TEXT NOT NULL,
-        CONSTRAINT fk_device FOREIGN KEY (device_id) REFERENCES SensorDevice (device_id) ON DELETE CASCADE
-    ) """
+    SensorData = """
+        CREATE TABLE IF NOT EXISTS SensorData (
+            device_id VARCHAR(100) NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            battery_level DECIMAL(5, 2) NOT NULL,
+            timestamp TEXT NOT NULL,
+            soil_moisture DECIMAL(5, 2) NOT NULL,
+            temperature DECIMAL(5, 2) NOT NULL,
+            humidity DECIMAL(5, 2) NOT NULL,
+            payload TEXT NOT NULL,
+            CONSTRAINT fk_device FOREIGN KEY (device_id) REFERENCES SensorDevice (device_id) ON DELETE CASCADE
+        ) """
 
-_unsynced_t = """
-    CREATE TABLE IF NOT EXISTS UnsyncedData (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        topic VARCHAR(50) NOT NULL,
-        origin TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        payload TEXT NOT NULL
-    ) """
+    Unsynced = """
+        CREATE TABLE IF NOT EXISTS UnsyncedData (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic VARCHAR(50) NOT NULL,
+            origin TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            payload TEXT NOT NULL
+        ) """
 
 # sql writer
 def _composer(data: Any) -> str:
@@ -112,16 +114,16 @@ async def init() -> int:
     try:
         async with aiosqlite.connect(_DATABASE) as db:
             # sink data table
-            await db.execute(_sk_data_t)
+            await db.execute(Tables.SinkData)
             await db.commit()
             # sensor device table
-            await db.execute(_se_device_t)
+            await db.execute(Tables.SensorDevice)
             await db.commit()
             # sensor data table
-            await db.execute(_se_data_t)
+            await db.execute(Tables.SensorData)
             await db.commit()
             # unsyced data table
-            await db.execute(_unsynced_t)
+            await db.execute(Tables.Unsynced)
             await db.commit()
             init_stat = status.SUCCESS
             _logs.debug(f"Database initialization successful ({init.__name__})")

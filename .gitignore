@@ -4,4 +4,6 @@ sink/settings.yaml
 sink/common/logs/smmic.log
 .win-dev-env
 .env
-storage/
+*.db
+*.db-shm
+*.db-wal

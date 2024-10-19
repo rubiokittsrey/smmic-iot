@@ -40,7 +40,9 @@ async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aioh
     if not client_session:
         _log.error("Error at %s, client_session is empty!", __name__)
         return
-
+    
+    stat: int
+    res_body: Any
     async with semaphore:
         if data['topic'] == '/dev/test':
             foo = 'foo'
@@ -58,7 +60,7 @@ async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aioh
 
             if req_body:
                 stat, res_body = await reqs.post_req(session=client_session, url=f"{APIRoutes.BASE_URL}{APIRoutes.SENSOR_ALERT}", data=req_body)
-
+        
 # checks api health with the /health end point
 # returns:
 # success if no problem
@@ -79,20 +81,20 @@ async def api_check() -> int:
         client = aiohttp.ClientSession()
     except Exception as e:
         _log.error(f"Failed to create client session object ({__name__} at {os.getpid()}): {str(e)}")
-        return status.FAILED
+        result = status.UNVERIFIED
     
     if loop and client:
         stat, res_body = await reqs.get_req(session=client, url=f"{APIRoutes.BASE_URL}{APIRoutes.HEALTH}")
 
-    # TODO: add other status
-    if stat == 200:
-        result = status.SUCCESS
-    elif stat == 0:
-        result = status.DISCONNECTED
-    else:
-        result = status.FAILED
+        # TODO: add other status
+        if stat == 200:
+            result = status.SUCCESS
+        elif stat == 0:
+            result = status.DISCONNECTED
+        else:
+            result = status.FAILED
 
-    await client.close()
+        await client.close()
     
     return result
 
