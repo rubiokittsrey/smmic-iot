@@ -56,7 +56,7 @@ def log_config(logger) -> _logging.Logger:
 
     return logger
 
-__log__ = log_config(logging.getLogger(__name__))
+_logs = log_config(logging.getLogger(__name__))
 
 def set_logging_configuration():
     for logger in _LOGGER_LIST:
@@ -207,7 +207,7 @@ def is_num(var) -> type[float | int] | None:
             pass
 
     if _type is None:
-        __log__.warning(f"Failed num_check at {__name__}: {var}")
+        _logs.warning(f"Failed num_check at {__name__}: {var}")
 
     return _type
 
@@ -224,12 +224,12 @@ def is_num(var) -> type[float | int] | None:
 # ...
 # -------
 class SensorData:
-    def __init__(self, sensor_type, device_id, timestamp, data_obj, raw_payload):
+    def __init__(self, sensor_type, device_id, timestamp, data_obj, payload):
         self.sensor_type = sensor_type
         self.device_id = device_id
         self.timestamp = timestamp
         self.data = data_obj
-        self.raw_payload = raw_payload
+        self.payload = payload
 
     # soil moisture sensor type
     class SoilMoistureSensor:
@@ -249,7 +249,7 @@ class SensorData:
             'SensorType': outer_split[0],
             'Sensor_Node': outer_split[1],
             'timestamp': outer_split[2],
-            'raw_payload': payload
+            'payload': payload
         })
 
         # parse the data from the 3rd index of the payload split
@@ -301,7 +301,7 @@ class SensorData:
         f_map = {
             'sensor_type': b_map['SensorType'],
             'device_id': b_map['Sensor_Node'],
-            'raw_payload': b_map['raw_payload'],
+            'payload': b_map['payload'],
             'data_obj': b_map['data_obj'],
             'timestamp': b_map['timestamp']
         }
@@ -324,7 +324,7 @@ class SinkData:
     # connected clients, connected total, sub count
     # bytes sent, bytes received, messages sent, messages received
     def __init__(self,
-                 raw_payload,
+                 payload,
                  timestamp,
                  connected_clients,
                  total_clients,
@@ -337,7 +337,7 @@ class SinkData:
                  device_id
                  ):
         self.device_id = device_id
-        self.raw_payload = raw_payload
+        self.payload = payload
         self.timestamp = timestamp
         self.connected_clients = connected_clients
         self.total_clients = total_clients
@@ -369,7 +369,7 @@ class SinkData:
         final.update({
             'Sink_Node': outer_split[0],
             'timestamp': outer_split[1],
-            'raw_payload': payload
+            'payload': payload
         })
 
         data: List[str] = outer_split[2].split("&")
@@ -401,7 +401,7 @@ class SinkData:
         try:
             _self = cls(**b_map)
         except Exception as e:
-            print(str(e))
+            _logs.error(f"Unhandled exception raised while creating a new SinkData object at {__name__}")
 
         return _self
         
@@ -459,7 +459,7 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
         msg = queue.get(timeout=0.1)
     except Exception as e:
         if not queue.empty():
-            __log__.error(f"Unhandled exception raised while getting items from queue ({name} at PID {os.getpid()}): {str(e)}")
+            _logs.error(f"Unhandled exception raised while getting items from queue ({name} at PID {os.getpid()}): {str(e)}")
         else:
             pass
 
@@ -472,8 +472,8 @@ class ExceptionsHandler:
         
         @staticmethod
         def alrd_running(name: str, pid: int, err: str):
-            __log__.error(f"Loop is already running ({name} at PID {pid}): {err}")
+            _logs.error(f"Loop is already running ({name} at PID {pid}): {err}")
 
         @staticmethod
         def unhandled(name: str, pid: int, err: str):
-            __log__.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")
+            _logs.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")
