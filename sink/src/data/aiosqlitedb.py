@@ -29,39 +29,44 @@ class Schema:
         # composes an SQL insert statement from the data
         @staticmethod
         def compose_insert(data: Union[Dict, SinkData]) -> Union[str, None]:
-            sk_data_obj: Union[SinkData, None] = None
+            data_obj: Union[SinkData, None] = None
             fields: List[str] = Schema.SinkData.fields
 
             # create a SinkData instance from the dictionary
             if isinstance(data, dict):
                 try:
-                    skdata_params = inspect.signature(SinkData).parameters
-                    skdata_kwargs = {}
-                    for f, _ in skdata_params.items():
+                    params = inspect.signature(SinkData).parameters
+                    kwargs = {}
+                    for f, _ in params.items():
                         if f == 'self':
                             continue
-                        skdata_kwargs.update({f: data[f]})
-                    sk_data_obj = SinkData(**skdata_kwargs)
-                except KeyError as e:
-                    _logs.error(f"KeyError raised at {__name__}: {str(e)}")
-                    return None
-                except TypeError as e:
-                    _logs.error(f"TypeError raised at {__name__}: {str(e)}")
+                        kwargs.update({f: data[f]})
+                    data_obj = SinkData(**kwargs)
+
+                except (KeyError, TypeError) as e:
+                    _logs.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
+                    return
+
+                except Exception as e:
+                    _logs.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
+                    return
+
             elif isinstance(data, SinkData):
-                sk_data_obj = data
+                data_obj = data
+
             else:
                 _logs.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
                 return None
 
-            if not sk_data_obj:
+            if not data_obj:
                 return
 
             cols = ", ".join(fields)
             # iterate over fields and compose VALUES part of the INSERT statement
-            values = ", ".join([repr(getattr(sk_data_obj, field)) for field in fields])
+            values = ", ".join([repr(getattr(data_obj, field)) for field in fields])
 
             # join the list into one command
-            c_final = f"INSERT INTO SinkData ({cols}) VALUES ({values});"
+            c_final = f"INSERT INTO SinkData ({cols}) VALUES ({values})"
 
             return c_final
 
@@ -115,7 +120,7 @@ class Schema:
                 ) """
 
             return c_final
-        
+
         fields = [
             'device_id',
             'name',
@@ -129,50 +134,74 @@ class Schema:
         # and composes and returns an insert statement from the data
         @staticmethod #TODO: implement
         def compose_insert(data: Union[Dict, SensorData]) -> Union[str, None]:
-            pass
-            # se_data_obj: Union[SinkData, None] = None
-            # fields: List[str] = Schema.SensorData.fields
+            data_obj: Union[SensorData, None] = None
+            fields: List[str] = Schema.SensorData.fields
 
-            # # create a SensorData instance from the dictionary
-            # if isinstance(data, dict):
-            #     try:
-            #         sedata_params = inspect.signature(SensorData).parameters
-            #         sedata_kwargs  = {}
-            #         for f, _ in sedata_params.items():
-            #             if f == 'self':
-            #                 continue
-            #             sedata_kwargs.update({f: data[f]})
-            #         se_data_obj = SensorData(**sedata_kwargs)
-            #     except KeyError as e:
-            #         _logs.error(f"TypeError raised at {__name__}: {str(e)}")
-            #     except TypeError as e:
-            #         _logs.error(f"TypeError raised at {__name__}: {str(e)}")
-            # elif isinstance(data, SensorData):
-            #     se_data_obj = data
-            # else:
-            #     _logs.warning(f"Provided data is neither of type dict or SensorData: {type(data)}")
-            #     return None
+            # create a SinkData instance from the dictionary
+            if isinstance(data, dict):
+                try:
+                    params = inspect.signature(SensorData).parameters
+                    kwargs = {}
+                    for field, _ in params.items():
+                        if field == 'self':
+                            continue
+                        elif field == 'readings':
+                            # NOTE: this part just immediately assumes soilmoisturesensor
+                            # because we have no other sensors in development
+                            # TODO: fix
+                            sm_params = inspect.signature(SensorData.soil_moisture).parameters
+                            sm_kwargs = {}
+                            for x, _ in sm_params.items():
+                                if field != 'self':
+                                    sm_kwargs.update({x: data[x]})
+                            sm_obj = SensorData.soil_moisture(**sm_kwargs)
+                            kwargs.update({field: sm_obj})
+                        else:
+                            kwargs.update({field: data[field]})
+                    data_obj = SensorData(**kwargs)
 
-            # if not se_data_obj:
-            #     return
+                except (KeyError, TypeError) as e:
+                    _logs.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
+                    return
 
-            # #create a hash id from device_id and the timestamp of the data
-            # raw_str = f'{se_data_obj.device_id}{se_data_obj.timestamp}'
-            # hash_id = sha256(raw_str.encode('utf-8')).hexdigest()
+                except Exception as e:
+                    _logs.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
+                    return
 
-            # # iterate over fields and compose VALUES pat of the INSERT statement
-            # val_arr = []
-            # for f in fields:
-            #     if f == 'hash_id':
-            #         val_arr.append(hash_id)
-            #     else:
-            #         val_arr.append(repr(getattr(se_data_obj, f)))
-            # values = ", ".join(values)
-            # cols = ", ".join(fields)
+            elif isinstance(data, SensorData):
+                data_obj = data
 
-            # c_final = f"INSERT INTO SensorData ({cols}) VALUES ({values})"
+            else:
+                _logs.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
+                return None
 
-            # return c_final
+            if not data_obj:
+                return
+            
+            # generate hash id from composite of device id and timestamp
+            raw_str = f'{data_obj.device_id}{data_obj.timestamp}'
+            hash_id = sha256(raw_str.encode('utf-8')).hexdigest()
+
+            val_arr = []
+            for field in fields:
+                if field == 'hash_id':
+                    val_arr.append(hash_id)
+                elif field == 'readings':
+                    params = inspect.signature(type(data_obj.readings)).parameters
+                    readings_arr = []
+                    for x, _ in params.items():
+                        if field != 'self':
+                            readings_arr.append(f'{x}:{getattr(data_obj.readings, x)}')
+                    val_arr.append('&'.join(readings_arr))
+                else:
+                    val_arr.append(getattr(data_obj, field))
+
+            values = ", ".join([repr(value) for value in val_arr])
+            cols = ", ".join(fields)
+
+            c_final = f"INSERT INTO SensorData ({cols}) VALUES ({values})"
+
+            return c_final
 
         @staticmethod
         def create_table() -> str:
@@ -180,11 +209,8 @@ class Schema:
                 CREATE TABLE IF NOT EXISTS SensorData (
                     hash_id TEXT PRIMARY KEY,
                     device_id VARCHAR(100) NOT NULL,
-                    battery_level DECIMAL(5, 2) NOT NULL,
                     timestamp TEXT NOT NULL,
-                    soil_moisture DECIMAL(5, 2) NOT NULL,
-                    temperature DECIMAL(5, 2) NOT NULL,
-                    humidity DECIMAL(5, 2) NOT NULL,
+                    readings TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     CONSTRAINT fk_device FOREIGN KEY (device_id) REFERENCES SensorDevice (device_id) ON DELETE CASCADE
                 ) """
@@ -194,11 +220,8 @@ class Schema:
         fields = [
             'hash_id',
             'device_id',
-            'battery_level',
             'timestamp',
-            'soil_moisture',
-            'temperature',
-            'humidity',
+            'readings',
             'payload'
         ]
 
@@ -207,7 +230,7 @@ class Schema:
         @staticmethod #TODO
         def serialize_from_map(data: Dict):
             pass
-        
+
         @staticmethod
         def create_table() -> str:
             c_final = """
@@ -218,7 +241,7 @@ class Schema:
                     timestamp TEXT NOT NULL,
                     payload TEXT NOT NULL
                 ) """
-            
+
             return c_final
 
 # sql writer
@@ -265,23 +288,27 @@ async def init() -> int:
     # generate schemas
     try:
         async with aiosqlite.connect(_DATABASE) as db:
-            # sink data table
-            await db.execute(Schema.SinkData.create_table())
+            tables = [
+                Schema.SinkData.create_table(),
+                Schema.SensorDevice.create_table(),
+                Schema.SensorData.create_table(),
+                Schema.Unsynced.create_table()
+            ]
+
+            # execute and append to results
+            results = []
+            for c in tables:
+                results.append(await db.execute(c))
+            # then commit
             await db.commit()
-            # sensor device table
-            await db.execute(Schema.SensorDevice.create_table())
-            await db.commit()
-            # sensor data table
-            await db.execute(Schema.SensorData.create_table())
-            await db.commit()
-            # unsyced data table
-            await db.execute(Schema.Unsynced.create_table())
-            await db.commit()
+
             init_stat = status.SUCCESS
             _logs.debug(f"Database initialization successful ({init.__name__})")
+            
     except aiosqlite.Error as e:
-        init_stat = status.FAILED
+        await db.rollback()
         _logs.error(f"Database init at {init.__name__} raised error: {str(e)}")
+        init_stat = status.FAILED
 
     return init_stat
 

@@ -224,15 +224,15 @@ def is_num(var) -> type[float | int] | None:
 # ...
 # -------
 class SensorData:
-    def __init__(self, sensor_type, device_id, timestamp, data_obj, payload):
+    def __init__(self, sensor_type, device_id, timestamp, readings, payload):
         self.sensor_type = sensor_type
         self.device_id = device_id
         self.timestamp = timestamp
-        self.data = data_obj
+        self.readings = readings
         self.payload = payload
 
     # soil moisture sensor type
-    class SoilMoistureSensor:
+    class soil_moisture:
         def __init__(self, soil_moisture, humidity, temperature, battery_level):
             self.soil_moisture = soil_moisture
             self.humidity = humidity
@@ -287,10 +287,10 @@ class SensorData:
     @classmethod
     def from_payload(cls, payload: str) -> SensorData:
         b_map = SensorData.map_sensor_payload(payload)
-
         readings = None
+
         if b_map['SensorType'] == 'soil_moisture':
-            readings = SensorData.SoilMoistureSensor(
+            readings = SensorData.soil_moisture(
                 soil_moisture=b_map['soil_moisture'],
                 humidity=b_map['humidity'],
                 temperature=b_map['temperature'],

@@ -18,7 +18,7 @@ from utils import SinkData, SensorData
 
 if __name__ == "__main__":
     data = {
-        'payload': 'raw_p',
+        'payload': 'raw payload',
         'timestamp': str(datetime.now()),
         'connected_clients': 25,
         'total_clients': 25,
@@ -34,9 +34,16 @@ if __name__ == "__main__":
     x = aiosqlitedb.Schema.SinkData.compose_insert(data)
     print(x)
 
-    # data = {
-        
-    # }
-    # data = SensorData('soil_moisture', 'fd7b1df2-3822-425c-b4c3-e9859251728d', str(datetime.now()), SensorData.SoilMoistureSensor(randint(60, 94), randint(60, 94), randint(20, 25), randint(50, 100)), 'yurt')
-    # x = aiosqlitedb.Schema.SensorData.compose_insert(data)
-    # print(x)
+    data = {
+        'sensor_type':'soil_moisture',
+        'device_id': "fd7b1df2-3822-425c-b4c3-e9859251728d",
+        'timestamp': str(datetime.now()),
+        'payload':'raw payload',
+        'soil_moisture':randint(60, 94),
+        'humidity':randint(60, 94),
+        'temperature':randint(60, 94),
+        'battery_level':randint(60, 94)
+    }
+    #data = SensorData('soil_moisture', 'fd7b1df2-3822-425c-b4c3-e9859251728d', str(datetime.now()), SensorData.soil_moisture(randint(60, 94), randint(60, 94), randint(20, 25), randint(50, 100)), 'yurt')
+    x = aiosqlitedb.Schema.SensorData.compose_insert(data)
+    print(x)
