@@ -246,8 +246,8 @@ class SensorData:
         # parse the contents of the payload string
         outer_split : List[str] = payload.split(";")
         final.update({
-            'SensorType': outer_split[0],
-            'Sensor_Node': outer_split[1],
+            'sensor_type': outer_split[0],
+            'device_id': outer_split[1],
             'timestamp': outer_split[2],
             'payload': payload
         })
@@ -289,7 +289,7 @@ class SensorData:
         b_map = SensorData.map_sensor_payload(payload)
         readings = None
 
-        if b_map['SensorType'] == 'soil_moisture':
+        if b_map['sensor_type'] == 'soil_moisture':
             readings = SensorData.soil_moisture(
                 soil_moisture=b_map['soil_moisture'],
                 humidity=b_map['humidity'],
@@ -299,8 +299,8 @@ class SensorData:
             b_map.update({'data_obj': readings})
         
         f_map = {
-            'sensor_type': b_map['SensorType'],
-            'device_id': b_map['Sensor_Node'],
+            'sensor_type': b_map['sensor_type'],
+            'device_id': b_map['device_id'],
             'payload': b_map['payload'],
             'data_obj': b_map['data_obj'],
             'timestamp': b_map['timestamp']
@@ -367,7 +367,7 @@ class SinkData:
 
         outer_split: List[str] = payload.split(';')
         final.update({
-            'Sink_Node': outer_split[0],
+            'device_id': outer_split[0],
             'timestamp': outer_split[1],
             'payload': payload
         })
@@ -395,8 +395,6 @@ class SinkData:
     @classmethod
     def from_payload(cls, payload: str) -> SinkData:
         b_map = SinkData.map_sink_payload(payload)
-        b_map.update({'device_id': b_map['Sink_Node']})
-        del b_map['Sink_Node']
 
         try:
             _self = cls(**b_map)

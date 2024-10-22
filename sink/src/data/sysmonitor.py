@@ -69,7 +69,7 @@ async def _put_to_queue(queue: multiprocessing.Queue):
 
     try:
         while True:
-            await asyncio.sleep(300) # execute every 5 minutes
+            await asyncio.sleep(5) # execute every 5 minutes
             _d = [
                     f'connected_clients:{_CONNECTED_CLIENTS}',
                     f'total_clients:{_CLIENTS_TOTAL}',
