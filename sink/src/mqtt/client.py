@@ -56,8 +56,8 @@ def _on_sub(client: paho_mqtt.Client, userdata, mid, reason_code_list, propertie
     _subscriptions.pop(0)
 
 def _subscribe(client: paho_mqtt.Client | None) -> None:
-    app, sys = Topics.get_topics()
-    topics = app + sys
+    smmic_t, sys_t = Topics.get_topics()
+    topics = smmic_t + sys_t
 
     topics.append(DevTopics.TEST)
 
@@ -65,44 +65,50 @@ def _subscribe(client: paho_mqtt.Client | None) -> None:
 
     if not client: return
     for topic in topics:
-        _t = topic if topic.startswith("$") or topic == '/dev/test' else f"{Broker.ROOT_TOPIC}{topic}"
+        if topic.count('/') == 0:
+            continue
         try:
-            client.subscribe(topic=_t, qos=2)
-            _subscriptions.append(_t)
+            client.subscribe(topic=topic, qos=2)
+            _subscriptions.append(topic)
         except Exception as e:
-            _log.warning(f"Unable to subscribe callback client to topics {topic}: {str(e)}")
+            _log.warning(f"Unable to subscribe callback client to topic {topic}: {str(e)}")
 
 # connect the client
 # start the loop
 # subscribe to topics
 # add the message handler callback function
-async def _connect_loop(_client: paho_mqtt.Client | None, _msg_handler: paho_mqtt.CallbackOnMessage) -> bool:
-    if not _client: return False
+async def _connect_loop(client: paho_mqtt.Client | None, _msg_handler: paho_mqtt.CallbackOnMessage) -> bool:
+    if not client: return False
 
     global _CLIENT_STAT
     global _CALLBACK_CLIENT
 
     try:
-        _client.connect(Broker.HOST, Broker.PORT)
-        _client.loop_start()
+        client.connect(Broker.HOST, Broker.PORT)
+        client.loop_start()
     except Exception as e:
         _log.error(f"Unable to establish successful connection with broker: {e}")
         return False
-    _subscribe(_client)
+    
+    # 1 second wait to ensure client is connected
+    await asyncio.sleep(1)
+    _subscribe(client)
     
     _CLIENT_STAT = status.CONNECTED
 
     # assign client the global callback client
-    _CALLBACK_CLIENT = _client
+    _CALLBACK_CLIENT = client
 
     # add the message callback handler
-    _client.message_callback_add(DevTopics.TEST, _msg_handler)
-    _client.message_callback_add("smmic/#", _msg_handler)
+    client.message_callback_add(DevTopics.TEST, _msg_handler)
 
-    __, sys = Topics.get_topics()
+    smmic_t, sys_t = Topics.get_topics()
+    topics = smmic_t + sys_t
 
-    for topic in sys:
-        _client.message_callback_add(topic, _msg_handler)
+    for topic in topics:
+        if topic.count('/') == 0:
+            continue
+        client.message_callback_add(topic, _msg_handler)
 
     return True
 

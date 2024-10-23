@@ -3,7 +3,7 @@
 #
 #
 
-PRETTY_ALIAS = "Hardware"
+alias = "hardware"
 
 # third-party
 import asyncio
@@ -55,13 +55,13 @@ async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Qu
         return
 
     if loop:
-        _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
+        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
 
         try:
             try:
                 asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
             except NameError as e:
-                _log.info(f'{PRETTY_ALIAS} starting with irrigation module disabled')
+                _log.info(f'{alias} starting with irrigation module disabled')
             with ThreadPoolExecutor() as pool:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)

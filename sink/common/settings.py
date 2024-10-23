@@ -16,11 +16,11 @@ _dev_configs = _settings_yaml["dev_configs"]
 _hardware_configs = _settings_yaml["hardware_configurations"]
 
 # load the .env variables
-envpath = os.path.join(os.path.dirname(__file__), '../.env')
-load_dotenv(envpath)
+_envpath = os.path.join(os.path.dirname(__file__), '../.env')
+load_dotenv(_envpath)
 
 # get variables from the .env file
-def __var_from_env__(key: str) -> Any:
+def _from_env(key: str) -> Any:
     var = os.getenv(key)
     if var:
         return var
@@ -88,27 +88,27 @@ class APPConfigurations:
 
 # api base url, enpoints
 class APIRoutes:
-    BASE_URL : str = __var_from_env__("API_URL")
-    TEST_URL : str = __var_from_env__("API_TEST_URL")
+    BASE_URL : str = _from_env("API_URL")
+    TEST_URL : str = _from_env("API_TEST_URL")
     HEADERS : str = _settings_yaml["headers"]
-    HEALTH : str = __var_from_env__("HEALTH_CHECK_URL")
+    HEALTH : str = _from_env("HEALTH_CHECK_URL")
 
     # sink endpoints
-    SINK_DATA : str = __var_from_env__("SINK_DATA")
+    SINK_DATA : str = _from_env("SINK_DATA")
 
     # sensor endpoints
-    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
-    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT")
+    SENSOR_DATA : str = _from_env("SENSOR_DATA")
+    SENSOR_ALERT : str = _from_env("SENSOR_ALERT")
 
 # api configurations
 class APIConfigs:
-    SECRET_KEY : str = __var_from_env__("SECRET_KEY")
+    SECRET_KEY : str = _from_env("SECRET_KEY")
 
 # mqtt broker configuration
 class Broker:
-    HOST : str = __var_from_env__("BROKER_HOST_ADDRESS")
-    PORT : int = int(__var_from_env__("BROKER_PORT"))
-    ROOT_TOPIC : str = __var_from_env__("ROOT_TOPIC")
+    HOST : str = _from_env("BROKER_HOST_ADDRESS")
+    PORT : int = int(_from_env("BROKER_PORT"))
+    ROOT_TOPIC : str = _from_env("ROOT_TOPIC")
 
 # mqtt dev topics
 class DevTopics:
@@ -119,25 +119,28 @@ class Channels:
 
 # mqtt functional topics
 class Topics:
-    ADMIN_SETTINGS : str = __var_from_env__("ADMIN_SETTINGS_TOPIC")
-    ADMIN_COMMANDS : str = __var_from_env__("ADMIN_COMMANDS_TOPIC")
-    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA_TOPIC")
-    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT_TOPIC")
-    SINK_DATA : str = __var_from_env__("SINK_DATA_TOPIC")
-    SINK_ALERT : str = __var_from_env__("SINK_ALERT_TOPIC")
-    SYS_BYTES_RECEIVED : str = __var_from_env__("BROKER_BYTES_RECEIVED")
-    SYS_BYTES_SENT : str = __var_from_env__("BROKER_BYTES_SENT")
-    SYS_CLIENTS_CONNECTED : str = __var_from_env__("BROKER_CLIENTS_CONNECTED")
-    SYS_CLIENTS_TOTAL : str = __var_from_env__("BROKER_CLIENTS_TOTAL")
-    SYS_MESSAGES_RECEIVED : str = __var_from_env__("BROKER_MESSAGES_RECEIVED")
-    SYS_MESSAGES_SENT : str = __var_from_env__("BROKER_MESSAGES_SENT")
-    SYS_SUB_COUNT : str = __var_from_env__("BROKER_SUBSCRIPTIONS_COUNT")
-    IRRIGATION : str = __var_from_env__("IRRIGATION_TOPIC")
+    ROOT_TOPIC : str = _from_env("ROOT_TOPIC")
+    ADMIN_SETTINGS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_SETTINGS_TOPIC')}"
+    ADMIN_COMMANDS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_COMMANDS_TOPIC')}"
+    SENSOR_DATA : str = f"{ROOT_TOPIC}{_from_env('SENSOR_DATA_TOPIC')}"
+    SENSOR_ALERT : str = f"{ROOT_TOPIC}{_from_env('SENSOR_ALERT_TOPIC')}"
+    SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
+    SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
+    IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
+    
+    # sys topics
+    SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
+    SYS_BYTES_SENT : str = _from_env('BROKER_BYTES_SENT')
+    SYS_CLIENTS_CONNECTED : str = _from_env('BROKER_CLIENTS_CONNECTED')
+    SYS_CLIENTS_TOTAL : str = _from_env('BROKER_CLIENTS_TOTAL')
+    SYS_MESSAGES_RECEIVED : str = _from_env('BROKER_MESSAGES_RECEIVED')
+    SYS_MESSAGES_SENT : str = _from_env('BROKER_MESSAGES_SENT')
+    SYS_SUB_COUNT : str = _from_env('BROKER_SUBSCRIPTIONS_COUNT')
 
     @staticmethod
     def get_topics() -> Tuple[List[str], List[str]]:
-        _topics: List[str] = []
-        _sys_topics: List[str] = []
+        smmic_topics: List[str] = []
+        sys_topics: List[str] = []
 
         for key, value in vars(Topics).items():
             if not value or type(value) != str:
@@ -145,11 +148,11 @@ class Topics:
             if not key.startswith("__"):
                 topic_value = getattr(Topics, key)
                 if key.startswith("SYS"):
-                    _sys_topics.append(topic_value)
+                    sys_topics.append(topic_value)
                 else:
-                    _topics.append(topic_value)
+                    smmic_topics.append(topic_value)
 
-        return _topics, _sys_topics
+        return smmic_topics, sys_topics
                     
 
     # def data_topics() -> List[str]: # type: ignore

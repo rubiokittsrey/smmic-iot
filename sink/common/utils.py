@@ -22,6 +22,7 @@ _LOGGER_LIST = []
 _LOG_FILE_HANDLER = _logging.FileHandler(log_path)
 _CONSOLE_HANDLER = _logging.StreamHandler()
 _LOG_FORMATTER = _logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_LOG_FORMATTER_VERBOSE = _logging.Formatter('%(asctime)s - %(levelname)s - %(message)s - %(processName)s (%(process)d) -> %(module)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 class status:
     # checks
@@ -48,8 +49,8 @@ def log_config(logger) -> _logging.Logger:
     console_handler = _CONSOLE_HANDLER
     logs_handler = _LOG_FILE_HANDLER
 
-    console_handler.setFormatter(_LOG_FORMATTER)
-    logs_handler.setFormatter(_LOG_FORMATTER)
+    console_handler.setFormatter(_LOG_FORMATTER_VERBOSE)
+    logs_handler.setFormatter(_LOG_FORMATTER_VERBOSE)
 
     logger.addHandler(console_handler)
     logger.addHandler(logs_handler) if settings.ENABLE_LOG_TO_FILE else None

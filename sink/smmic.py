@@ -11,6 +11,7 @@ import argparse
 import os
 import asyncio
 import multiprocessing
+from setproctitle import setproctitle
 # import sys
 # from typing import Any
 # from concurrent.futures import ThreadPoolExecutor
@@ -45,6 +46,8 @@ def run_sub_p(*args, **kwargs):
     except KeyError:
         _log.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
         pretty_alias = sub_p.__name__
+    
+    setproctitle(pretty_alias)
 
     loop = None
     try:
@@ -84,7 +87,7 @@ def run_sub_p(*args, **kwargs):
 # the main function of this operation
 # and the parent process of the task manager process
 async def main(loop: asyncio.AbstractEventLoop) -> None:
-    _log.info(f"SMMIC running at PID {os.getpid()}")
+    #_log.info(f"SMMIC Main process running")
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
@@ -93,7 +96,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     sys_queue = multiprocessing.Queue()
 
     task_manager_kwargs = {
-        'pretty_alias': taskmanager.PRETTY_ALIAS,
+        'pretty_alias': taskmanager.alias,
         'sub_proc': taskmanager.start,
         'tskmngr_q': task_queue,
         'aiohttpclient_q': aio_queue,
@@ -102,14 +105,14 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     }
 
     aio_client_kwargs = {
-        'pretty_alias': aiohttpclient.PRETTY_ALIAS,
+        'pretty_alias': aiohttpclient.alias,
         'sub_proc': aiohttpclient.start,
         'aiohttpclient_q': aio_queue,
         'tskmngr_q': task_queue
     }
 
     hardware_kwargs = {
-        'pretty_alias': hardware.PRETTY_ALIAS,
+        'pretty_alias': hardware.alias,
         'sub_proc': hardware.start,
         'hardware_q': hardware_queue,
         'tskmngr_q': task_queue
@@ -121,7 +124,7 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
         # first, spawn and run the task manager process
         processes : List[multiprocessing.Process] = []
         for p_kwargs in kwargs_list:
-            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs))
+            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs, name=p_kwargs['pretty_alias']))
         # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
         # processes.append(multiprocessing.Process(target=run_task_manager, kwargs=task_manager_kwargs))
         # the aiohttp client process handles requests to and from the api
@@ -266,6 +269,8 @@ def sys_check() -> Tuple[int, int | None]:
     return core_status, api_status
 
 if __name__ == "__main__":
+
+    multiprocessing.current_process().name = 'smmic-main'
     if os.system('cls') != 0:
         os.system('clear')
 

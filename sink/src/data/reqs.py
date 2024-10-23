@@ -51,7 +51,7 @@ def _req(func: Callable) -> Any:
             #     print(f"Timeout error occurred: {e}")
 
             attempt += 1
-                
+
         end = time.time()
 
         # organize similar errors into one log

@@ -7,7 +7,7 @@ this is the aiohttp session module of the entire system
 # TODO: documentation
 """
 
-PRETTY_ALIAS = "AIO HTTP Client"
+alias = "aiohttp-client"
 
 # third-party
 import logging
@@ -108,7 +108,7 @@ async def start(aiohttpclient_q: multiprocessing.Queue, tskmngr_q: multiprocessi
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"{PRETTY_ALIAS} failed to get running event loop: {str(e)}")
+        _log.error(f"{alias} failed to get running event loop: {str(e)}")
         return
     
     # acquire a aiohttp.ClientSession object
@@ -117,11 +117,11 @@ async def start(aiohttpclient_q: multiprocessing.Queue, tskmngr_q: multiprocessi
     try:
         client = aiohttp.ClientSession()
     except Exception as e:
-        _log.error(f"{PRETTY_ALIAS} failed to create client session object: {str(e)}")
+        _log.error(f"{alias} failed to create client session object: {str(e)}")
         return
 
     if loop and client:
-        _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
+        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         try:
             with ThreadPoolExecutor() as pool:
                 while True:

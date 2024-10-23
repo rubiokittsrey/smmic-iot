@@ -69,7 +69,7 @@ async def _put_to_queue(queue: multiprocessing.Queue):
 
     try:
         while True:
-            await asyncio.sleep(15) # execute every 5 minutes
+            await asyncio.sleep(300) # execute every 5 minutes
             _d = [
                     f'connected_clients:{_CONNECTED_CLIENTS}',
                     f'total_clients:{_CLIENTS_TOTAL}',
@@ -84,7 +84,7 @@ async def _put_to_queue(queue: multiprocessing.Queue):
             for d in _d:
                 data = data + f'&{d}'
             payload = f'{APPConfigurations.CLIENT_ID};{datetime.now()};{data}'
-            msg.update({'topic':'smmic/sink/data', 'payload':f'{payload}'})
+            msg.update({'topic':Topics.SINK_DATA, 'payload':f'{payload}'})
 
             try:
                 queue.put(msg)

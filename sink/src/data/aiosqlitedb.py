@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Union
 from settings import APPConfigurations, Topics, Broker
 from utils import log_config, get_from_queue, SinkData, SensorData, status
 
-_logs = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(__name__))
 
 _DATABASE = f"{APPConfigurations.LOCAL_STORAGE_DIR}local.db"
 
@@ -44,18 +44,18 @@ class Schema:
                     data_obj = SinkData(**kwargs)
 
                 except (KeyError, TypeError) as e:
-                    _logs.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
+                    _log.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
                     return
 
                 except Exception as e:
-                    _logs.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
+                    _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
                     return
 
             elif isinstance(data, SinkData):
                 data_obj = data
 
             else:
-                _logs.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
+                _log.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
                 return None
 
             if not data_obj:
@@ -161,18 +161,18 @@ class Schema:
                     data_obj = SensorData(**kwargs)
 
                 except (KeyError, TypeError) as e:
-                    _logs.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
+                    _log.error(f"{type(e).__name__} raised at {__name__}: {str(e)}")
                     return
 
                 except Exception as e:
-                    _logs.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
+                    _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
                     return
 
             elif isinstance(data, SensorData):
                 data_obj = data
 
             else:
-                _logs.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
+                _log.warning(f"Provided data is neither of type dict or SinkData: {type(data)}")
                 return None
 
             if not data_obj:
@@ -248,34 +248,51 @@ class Schema:
 def _composer(data: Any) -> str:
 
     sql = None
-    if data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}':
+    if data['topic'] == Topics.SINK_DATA:
         sql = Schema.SinkData.compose_insert(SinkData.from_payload(data['payload']))
 
-    elif data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}':
+    elif data['topic'] == Topics.SENSOR_DATA:
         sql = Schema.SensorData.compose_insert(SinkData.from_payload(data['payload']))
 
     return sql
 
 # sql executor
 async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, db_connection: aiosqlite.Connection, data: Any):
-    # TODO use a better condition
+    # compose sql statement
+    sql = _composer(data)
+    if not sql:
+        return
+    
+    # if topic contains 'data'
+    # use write_lock
+    # TODO: this condition could be better
+    err: List[str] = []
     if data['topic'].count('data') > 0:
         async with write_lock:
             for _ in range (3):
                 try:
-                    sql = _composer(data)
-                    res = await db_connection.execute(sql)
-                    commit_res = await db_connection.commit()
-                    _logs.debug(f"aiosqlitedb._executor: {res}, {commit_res}")
+                    await db_connection.execute(sql)
+                    await db_connection.commit()
                     break
                 except aiosqlite.OperationalError as e:
-                    _logs.warning(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
-                    await asyncio.sleep(0.5)
+                    err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
+                    await asyncio.sleep(1)
             # TODO: implement dumping data to a dump file when the sql command fails
     else:
+        # TODO: implement read
         async with read_semaphore:
             pass
-            # TODO: implement read
+
+    # organize similar errors into one log
+    if len(err) > 0:
+        logged: List[str] = []
+        for e in err:
+            if e in logged:
+                pass
+            else:
+                count = err.count(e)
+                _log.error((f"({count}) " if count > 1 else "") + e + " ")
+                logged.append(e)
 
 # generates / checks schemas
 # if successful, return status.SUCCESS
@@ -285,7 +302,7 @@ async def init() -> int:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _logs.error(f"Unable to get running event loop {os.getpid()} ({__name__}): {str(e)}")
+        _log.error(f"Unable to get running event loop {os.getpid()} ({__name__}): {str(e)}")
 
     # generate schemas
     try:
@@ -305,11 +322,11 @@ async def init() -> int:
             await db.commit()
 
             init_stat = status.SUCCESS
-            _logs.debug(f"Database initialization successful ({init.__name__})")
+            _log.debug(f"Database initialization successful ({init.__name__})")
             
     except aiosqlite.Error as e:
         await db.rollback()
-        _logs.error(f"Database init at {init.__name__} raised error: {str(e)}")
+        _log.error(f"Database init at {init.__name__} raised error: {str(e)}")
         init_stat = status.FAILED
 
     return init_stat
@@ -319,7 +336,7 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _logs.error(f"Unable to get running event loop at PID {os.getpid()} ({__name__}): {str(e)}")
+        _log.error(f"Unable to get running event loop at PID {os.getpid()} ({__name__}): {str(e)}")
         return
 
     read_semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
@@ -339,7 +356,7 @@ async def start(queue: multiprocessing.Queue) -> None:
                 while True:
 
                     if not flag:
-                        _logs.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
+                        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
                         flag = not flag
 
                     try:
@@ -351,12 +368,12 @@ async def start(queue: multiprocessing.Queue) -> None:
                             t.add_done_callback(tasks.discard)
 
                     except Exception as e:
-                        _logs.error(f"Unhandled exception at {__name__} loop: {str(e)}")
+                        _log.error(f"Unhandled exception at {__name__} loop: {str(e)}")
 
                     await asyncio.sleep(0.5)
 
     except (asyncio.CancelledError, KeyboardInterrupt):
-        _logs.debug(f"Shutting down {__name__} at PID {os.getpid()}")
+        _log.debug(f"Shutting down {__name__} at PID {os.getpid()}")
 
         # cleanup
         for t in tasks:

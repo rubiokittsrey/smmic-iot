@@ -109,7 +109,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
     
     if loop:
-        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active @ PID {os.getpid()}")
+        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
 
         asyncio.create_task(_watcher(loop, queue))
         try:
@@ -128,7 +128,7 @@ async def start(queue: multiprocessing.Queue) -> None:
                         except KeyboardInterrupt:
                             GPIO.cleanup()
                         except Exception as e:
-                            _log.warning(f"{__name__} raised unhandled exception: {e}")
+                            _log.warning(f"{__name__.capitalize()} raised unhandled exception: {e}")
                         await asyncio.sleep(0.01)
                     GPIO.cleanup()
                 else:

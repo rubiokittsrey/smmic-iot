@@ -3,7 +3,7 @@
 #
 #
 
-PRETTY_ALIAS = "Task Manager"
+alias = "task-manager"
 
 # third-party
 import multiprocessing
@@ -55,20 +55,25 @@ async def _dev_test_task(data: dict) -> None:
 # * hardware_queue: the message queue to send items to the hardware process
 async def _delegator(semaphore: asyncio.Semaphore, data: Dict) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
-    aio_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}', f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}']
+    aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
     # topics that need to be handled by the hardware module
-    hardware_queue_topics = [f'{Broker.ROOT_TOPIC}{Topics.IRRIGATION}'] # TODO: implement this
+    hardware_queue_topics = [Topics.IRRIGATION] # TODO: implement this
+    # topics handled by aiosqlitedb module
+    aiosqlite_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA]
+    # test topics
     test_topics = ['/dev/test']
 
     async with semaphore:
 
+        data_keys = list(data.keys())
+
         if data['topic'] in test_topics:
             await _dev_test_task(data)
 
-        if data['topic'].count('data') > 0:
+        if data['topic'] in aiosqlite_queue_topics:
             _to_queue(_AIOSQLITE_Q, data)
 
-        if data['topic'] in aio_queue_topics:
+        if data['topic'] in aiohttp_queue_topics:
             _to_queue(_AIO_Q, data)
                 # TODO: refactor to implement proper return value
 
@@ -76,7 +81,7 @@ async def _delegator(semaphore: asyncio.Semaphore, data: Dict) -> Any:
             _to_queue(_HARDWARE_Q, data)
     
         # sensor alert handling
-        if data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_ALERT}':
+        if data['topic'] == Topics.SENSOR_ALERT:
             alert_mapped = SensorAlerts.map_sensor_alert(data['payload'])
             if not alert_mapped:
                 # TODO: handle error scenario
@@ -138,7 +143,7 @@ async def start(
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError as e:
-        _log.error(f"{PRETTY_ALIAS} failed to get running event loop at PID {os.getpid()}: {str(e)}")
+        _log.error(f"{alias} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
     global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q
@@ -148,7 +153,7 @@ async def start(
     _AIOSQLITE_Q = multiprocessing.Queue()
 
     if loop:
-        _log.info(f"{PRETTY_ALIAS} subprocess active at PID {os.getpid()}")
+        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             aiosqlitedb_t = asyncio.create_task(aiosqlitedb.start(_AIOSQLITE_Q))
@@ -160,7 +165,7 @@ async def start(
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if task:
-                        _log.debug(f"{PRETTY_ALIAS} received item from queue: {task}")
+                        _log.debug(f"{alias} received item from queue: {task}")
 
                         # NOTE: this block of code currently serves no purpose (unimplemented)
                         # assign a priority for the task
