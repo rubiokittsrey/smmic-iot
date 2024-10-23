@@ -177,7 +177,7 @@ class Schema:
 
             if not data_obj:
                 return
-            
+
             # generate hash id from composite of device id and timestamp
             raw_str = f'{data_obj.device_id}{data_obj.timestamp}'
             hash_id = sha256(raw_str.encode('utf-8')).hexdigest()
@@ -247,24 +247,26 @@ class Schema:
 # sql writer
 def _composer(data: Any) -> str:
 
-    sql_command = None
+    sql = None
     if data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SINK_DATA}':
-        sk_data = SinkData.from_payload(data['payload'])
+        sql = Schema.SinkData.compose_insert(SinkData.from_payload(data['payload']))
 
     elif data['topic'] == f'{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}':
-        se_data = SensorData.from_payload(data['payload'])
+        sql = Schema.SensorData.compose_insert(SinkData.from_payload(data['payload']))
 
-    return 'f'
+    return sql
 
 # sql executor
 async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, db_connection: aiosqlite.Connection, data: Any):
+    # TODO use a better condition
     if data['topic'].count('data') > 0:
         async with write_lock:
             for _ in range (3):
                 try:
-                    _composer(data)
-                    # await db_connection.execute(_compose(data))
-                    # await db_connection.commit()
+                    sql = _composer(data)
+                    res = await db_connection.execute(sql)
+                    commit_res = await db_connection.commit()
+                    _logs.debug(f"aiosqlitedb._executor: {res}, {commit_res}")
                     break
                 except aiosqlite.OperationalError as e:
                     _logs.warning(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
