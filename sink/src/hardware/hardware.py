@@ -44,7 +44,7 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
                 _IRRIGATION_QUEUE.put(task_payload)
 
 # begin the hardware module process
-async def start(hardware_q: multiprocessing.Queue, tskmngr_q: multiprocessing.Queue) -> None:
+async def start(hardware_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     # acquire the current running event loop
     loop: asyncio.AbstractEventLoop | None = None

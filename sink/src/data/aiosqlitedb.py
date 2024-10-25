@@ -302,7 +302,7 @@ async def init() -> int:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Unable to get running event loop {os.getpid()} ({__name__}): {str(e)}")
+        _log.error(f"Failed to acquire event loop {os.getpid()} ({__name__}): {str(e)}")
 
     # generate schemas
     try:
@@ -336,7 +336,7 @@ async def start(queue: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Unable to get running event loop at PID {os.getpid()} ({__name__}): {str(e)}")
+        _log.error(f"Unable to get running event loop (exception: {type(e).__name__}): {str(e)}")
         return
 
     read_semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)

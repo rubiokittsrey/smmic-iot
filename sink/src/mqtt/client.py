@@ -94,7 +94,7 @@ async def _connect_loop(client: paho_mqtt.Client | None, _msg_handler: paho_mqtt
     await asyncio.sleep(1)
     _subscribe(client)
     
-    _CLIENT_STAT = status.CONNECTED
+    _CLIENT_STAT = status.SUCCESS
 
     # assign client the global callback client
     _CALLBACK_CLIENT = client
@@ -125,7 +125,7 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
         attempts = attempts - 1
         try:
             _client.connect(Broker.HOST, Broker.PORT)
-            _CLIENT_STAT = status.CONNECTED
+            _CLIENT_STAT = status.SUCCESS
         except Exception as e:
             _log.error(f"Unable to establish successful connection with broker: {e}, retrying again in {timeout} seconds (attempts remaining: {attempts})")
             time.sleep(timeout)
@@ -134,7 +134,7 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
             _log.critical(f"Callback client was unable to successfully connect with broker at {Broker.HOST}:{Broker.PORT}, max attempts allowed reached!")
             _CLIENT_STAT = status.FAILED
 
-        if _CLIENT_STAT == status.CONNECTED:
+        if _CLIENT_STAT == status.SUCCESS:
             break
 
 # starts the client
@@ -186,7 +186,7 @@ async def shutdown_client() -> bool:
     
     _log.info(f"Shutting down SMMIC callback client at PID: {os.getpid()}")
 
-    if _CLIENT_STAT == status.CONNECTED:
+    if _CLIENT_STAT == status.SUCCESS:
         try:
             _log.debug(f"Disconnecting callback client {APPConfigurations.CLIENT_ID} from broker at {Broker.HOST, Broker.PORT}")
             _CALLBACK_CLIENT.disconnect()

@@ -50,7 +50,7 @@ def __init_client__() -> paho_mqtt.Client | None:
 # internal builtin callbacks for the client
 def __on_connected__(client, userData, flags, rc):
     global CLIENT_STAT
-    CLIENT_STAT = status.CONNECTED
+    CLIENT_STAT = status.SUCCESS
 
     __log__.info(f'Callback client connected to broker at {Broker.HOST}:{Broker.PORT}')
 
@@ -90,7 +90,7 @@ async def __shutdown_disconnect__() -> None:
     if not CALLBACK_CLIENT:
         return
     
-    if CLIENT_STAT == status.CONNECTED:
+    if CLIENT_STAT == status.SUCCESS:
         try:
             __log__.info(f'Disconnecting SMMIC callback client {APPConfigurations.CLIENT_ID} from broker at {Broker.HOST, Broker.PORT}')
             CALLBACK_CLIENT.disconnect()
@@ -109,7 +109,7 @@ async def __loop_connect__(client: paho_mqtt.Client | None):
 
     try:
         client.connect(Broker.HOST, Broker.PORT)
-        CLIENT_STAT = status.CONNECTED
+        CLIENT_STAT = status.SUCCESS
     except Exception as e:
         __log__.error(f'Unable to establish successful connection with broker: {e}')
     __subscribe__(client)

@@ -86,7 +86,7 @@ def run_sub_p(*args, **kwargs):
 
 # the main function of this operation
 # and the parent process of the task manager process
-async def main(loop: asyncio.AbstractEventLoop) -> None:
+async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     #_log.info(f"SMMIC Main process running")
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
@@ -98,27 +98,28 @@ async def main(loop: asyncio.AbstractEventLoop) -> None:
     task_manager_kwargs = {
         'pretty_alias': taskmanager.alias,
         'sub_proc': taskmanager.start,
-        'tskmngr_q': task_queue,
+        'taskmanager_q': task_queue,
         'aiohttpclient_q': aio_queue,
         'hardware_q': hardware_queue,
         'sysmonitor_q': sys_queue
     }
 
-    aio_client_kwargs = {
+    aiohttp_client_kwargs = {
         'pretty_alias': aiohttpclient.alias,
         'sub_proc': aiohttpclient.start,
         'aiohttpclient_q': aio_queue,
-        'tskmngr_q': task_queue
+        'taskmanager_q': task_queue,
+        'api_init_status': api_status
     }
 
     hardware_kwargs = {
         'pretty_alias': hardware.alias,
         'sub_proc': hardware.start,
         'hardware_q': hardware_queue,
-        'tskmngr_q': task_queue
+        'taskmanager_q': task_queue
     }
 
-    kwargs_list = [task_manager_kwargs, aio_client_kwargs, hardware_kwargs]
+    kwargs_list = [task_manager_kwargs, aiohttp_client_kwargs, hardware_kwargs]
 
     try:
         # first, spawn and run the task manager process
@@ -191,7 +192,7 @@ def run(core_status: int, api_status: int | None):
 
     # if loop event loop is present, run main()
     if loop:
-        main_t = loop.create_task(main(loop))
+        main_t = loop.create_task(main(loop, api_status))
         try:
             loop.run_forever()
         except KeyboardInterrupt:

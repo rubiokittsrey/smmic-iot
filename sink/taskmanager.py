@@ -128,7 +128,7 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
 #
 async def start(
-        tskmngr_q: multiprocessing.Queue,
+        taskmanager_q: multiprocessing.Queue,
         aiohttpclient_q: multiprocessing.Queue,
         hardware_q: multiprocessing.Queue,
         sysmonitor_q: multiprocessing.Queue
@@ -147,7 +147,7 @@ async def start(
         return
 
     global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q
-    _TSKMNGR_Q = tskmngr_q
+    _TSKMNGR_Q = taskmanager_q
     _AIO_Q = aiohttpclient_q
     _HARDWARE_Q = hardware_q
     _AIOSQLITE_Q = multiprocessing.Queue()
@@ -165,14 +165,14 @@ async def start(
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if task:
-                        _log.debug(f"{alias} received item from queue: {task}")
+                        _log.debug(f"{alias} received item from queue: {task}".capitalize())
 
                         # NOTE: this block of code currently serves no purpose (unimplemented)
                         # assign a priority for the task
                         assigned_p = set_priority(task['topic'])
                         # if not priority set to moderate
                         if not assigned_p:
-                            _log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
+                            #_log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
                         asyncio.create_task(_delegator(semaphore=semaphore, data=task))

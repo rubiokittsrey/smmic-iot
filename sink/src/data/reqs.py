@@ -13,7 +13,7 @@ from typing import Dict, Any, Callable, List, Tuple
 from decimal import Decimal
 
 # internal helpers, configs
-from settings import APIRoutes, APPConfigurations
+from settings import APPConfigurations
 from utils import log_config
 
 _log = log_config(logging.getLogger(__name__))
@@ -40,13 +40,13 @@ def _req(func: Callable) -> Any:
                 #return response
             except aiohttp.ClientConnectionError as e:
                 await asyncio.sleep(3) # sleep for 3 secs (non-blocking) to allow connection to establish
-                err.append(f"aiohttp.ClientConnectionError raised at requests.{func.__name__}: {str(e)}")
+                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
             except aiohttp.ClientResponseError as e:
-                err.append(f"aiohttp.ClientResponseError raised at requests.{func.__name__}: {str(e)}")
+                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
             except aiohttp.ClientError as e:
-                err.append(f"aiohttp.ClientError raised at requests.{func.__name__}: {str(e)}")
+                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
             except Exception as e:
-                err.append(f"Unhandled exception raised at requests.{func.__name__}: {str(e)}")
+                err.append(f"Unhandled exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
             # except aiohttp.ClientTimeout as e:
             #     print(f"Timeout error occurred: {e}")
 

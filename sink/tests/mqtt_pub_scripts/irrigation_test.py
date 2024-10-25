@@ -35,7 +35,7 @@ async def abstracted_pub():
     payload = f"{device_id};{timestamp};{str(signal)}"
     try:
         msg = client.publish(
-            topic=f"{Broker.ROOT_TOPIC}{Topics.IRRIGATION}",
+            topic=Topics.IRRIGATION,
             payload=payload,
             qos=1
         )

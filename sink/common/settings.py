@@ -52,7 +52,6 @@ DEV_MODE = __get_dev_mode__()
 # development configurations
 # class DevConfigs:
 
-
 # application configurations 
 class APPConfigurations:
     GLOBAL_SEMAPHORE_COUNT : int = _settings_yaml["app_configurations"]["global_semaphore_count"]
@@ -88,17 +87,17 @@ class APPConfigurations:
 
 # api base url, enpoints
 class APIRoutes:
-    BASE_URL : str = _from_env("API_URL")
-    TEST_URL : str = _from_env("API_TEST_URL")
+    BASE_URL : str = _from_env('API_URL')
+    TEST_URL : str = f"{BASE_URL}{_from_env('API_TEST_URL')}"
     HEADERS : str = _settings_yaml["headers"]
-    HEALTH : str = _from_env("HEALTH_CHECK_URL")
+    HEALTH : str = f"{BASE_URL}{_from_env('HEALTH_CHECK_URL')}"
 
     # sink endpoints
-    SINK_DATA : str = _from_env("SINK_DATA")
+    SINK_DATA : str = f"{BASE_URL}{_from_env('SINK_DATA')}"
 
     # sensor endpoints
-    SENSOR_DATA : str = _from_env("SENSOR_DATA")
-    SENSOR_ALERT : str = _from_env("SENSOR_ALERT")
+    SENSOR_DATA : str = f"{BASE_URL}{_from_env('SENSOR_DATA')}"
+    SENSOR_ALERT : str = f"{BASE_URL}{_from_env('SENSOR_ALERT')}"
 
 # api configurations
 class APIConfigs:
@@ -127,7 +126,7 @@ class Topics:
     SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
     SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
     IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
-    
+
     # sys topics
     SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
     SYS_BYTES_SENT : str = _from_env('BROKER_BYTES_SENT')

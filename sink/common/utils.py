@@ -6,6 +6,7 @@ import os
 import re
 import logging
 import multiprocessing
+import queue
 from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
@@ -214,7 +215,7 @@ def is_num(var) -> type[float | int] | None:
 
 # maps the payload from sensor devices
 # assuming that the shape of the payload (as a string) is:
-# -------
+#
 # sensor_type;
 # device_id;
 # timestamp;
@@ -223,7 +224,7 @@ def is_num(var) -> type[float | int] | None:
 # reading:value&
 # reading:value&
 # ...
-# -------
+#
 class SensorData:
     def __init__(self, sensor_type, device_id, timestamp, readings, payload):
         self.sensor_type = sensor_type
@@ -312,15 +313,15 @@ class SensorData:
 
 # maps the payload from the sink data
 # assuming that the shape of the payload (as a string) is:
-# ------
+#
 # device_id;
 # timestamp;
 # key:value&
 # key:value&
 # key:value&
 # key:value&
-# ..........
-# ------
+# ...
+#
 class SinkData:
     # connected clients, connected total, sub count
     # bytes sent, bytes received, messages sent, messages received
@@ -455,14 +456,24 @@ class SensorAlerts:
 def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
     msg: dict | None = None
     try:
-        msg = queue.get(timeout=0.1)
+        msg = queue.get(timeout=0.5)
     except Exception as e:
         if not queue.empty():
-            _logs.error(f"Unhandled exception raised while getting items from queue ({name} at PID {os.getpid()}): {str(e)}")
-        else:
-            pass
+            _logs.error(f"Unhandled exception raised while getting items from queue ({name}): {str(e)}")
 
     return msg
+
+def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any) -> Tuple[int, Any]:
+    buffer = None
+    result = status.FAILED
+    try:
+        queue.put(obj=data, timeout=0.5)
+        result = status.SUCCESS
+    except Exception as e:
+        buffer = data
+        _logs.error(f"Unhandled exception raised while putting items to queue ({name}): {str(e)}")
+    
+    return result, buffer
 
 # helper class with functions for handling common exceptions
 class ExceptionsHandler:
