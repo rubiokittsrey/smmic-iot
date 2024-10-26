@@ -13,7 +13,8 @@ from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import log_config, is_num, get_from_queue
+from aiohttpclient import api_check
+from utils import log_config, is_num, get_from_queue, status
 from settings import APPConfigurations, Topics
 
 _log = log_config(logging.getLogger(__name__))
@@ -26,6 +27,8 @@ _BYTES_RECEIVED : int = 0
 _MESSAGES_SENT : int = 0
 _MESSAGES_RECEIVED : int = 0
 # _FREE_MEMORY : int = 0
+
+_PERIODIC_CHK_FLAG: bool = False
 
 async def _update_values(topic : str, value : int) -> None:
     global _CONNECTED_CLIENTS, _CLIENTS_TOTAL, _SUB_COUNT, _BYTES_SENT, _BYTES_RECEIVED, _MESSAGES_SENT, _MESSAGES_RECEIVED
@@ -135,6 +138,31 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 
     return mem_f, swap_f
 
+async def _periodic_api_chk(no_wait_start = False) -> int:
+    await_time = 1800 # await time in seconds, 5 minutes
+    mod_name = list(__name__.split('.'))[len(__name__.split('.')) - 1]
+    chk_res: int = status.UNVERIFIED
+
+    _log.info(f"{mod_name} running periodic API check".capitalize())
+    try:
+        while not chk_res == status.CONNECTED:
+            # sleep first
+            if not no_wait_start:
+                await asyncio.sleep(await_time) # every 30 minutes
+
+            chk_res = await api_check()
+
+            if chk_res == status.SUCCESS:
+                break
+            else:
+                _log.warning(f"{mod_name} periodic API check returned with status.DISCONNECTED (retrying again in {await_time / 60} minutes)".capitalize())
+    
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        return
+    
+    _log.info(f"{mod_name} periodic API check returned with status.CONNECTED".capitalize())
+    return status.CONNECTED
+
 # start this module / coroutine
 async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing.Queue, api_init_stat: int) -> None:
     # verify existence of event loop
@@ -153,14 +181,32 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
                 asyncio.create_task(_put_to_queue(tskmngr_queue))
+
+                if api_init_stat in [status.DISCONNECTED, status.FAILED]:
+                    global _PERIODIC_CHK_FLAG
+                    _PERIODIC_CHK_FLAG = True
+                    init_chk = asyncio.create_task(_periodic_api_chk())
+                    init_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
+
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
                 while True:
                     item = await loop.run_in_executor(pool, get_from_queue, sys_queue, __name__)
 
+                    # if the item is an api_disconnect flag
                     if item:
-                        #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
-                        asyncio.create_task(_update_values(topic=item['topic'], value=int(item['payload'])))
+                        if list(item.keys()).count('api_disconnect'):
+                            if not _PERIODIC_CHK_FLAG:
+                                _PERIODIC_CHK_FLAG = True
+                                while_run_chk = asyncio.create_task(_periodic_api_chk(no_wait_start=True))
+                                while_run_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
+                        else:
+                            #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
+                            asyncio.create_task(_update_values(topic=item['topic'], value=int(item['payload'])))
 
                     await asyncio.sleep(0.05)
+
         except KeyboardInterrupt or asyncio.CancelledError:
-            raise
+            return
+
+        except Exception as e:
+            _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e.__cause__)}")

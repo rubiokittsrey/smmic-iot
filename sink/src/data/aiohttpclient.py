@@ -69,6 +69,14 @@ async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aioh
             with ThreadPoolExecutor() as pool:
                 loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task)
 
+                # trigger api check on sys_monitor if cause is connect err
+                try:
+                    if aiohttp.ClientConnectorError.__name__ in list(result):
+                        # send signal to taskamanager
+                        loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, {'api_disconnect': True})
+                except TypeError as e:
+                    _log.error(f"Request returned with failure but result is not a list of errors: {str(result)}")
+
         return
 
 # checks api health with the /health end point

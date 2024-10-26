@@ -28,6 +28,7 @@ _TSKMNGR_Q: multiprocessing.Queue
 _AIO_Q: multiprocessing.Queue
 _HARDWARE_Q: multiprocessing.Queue
 _AIOSQLITE_Q: multiprocessing.Queue
+_SYSMONITOR_Q: multiprocessing.Queue
 
 # unimplemented priority class for tasks
 # not sure how to implement this yet
@@ -65,6 +66,10 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     test_topics = ['/dev/test']
 
     async with semaphore:
+        
+        if list(task.keys()).count('api_disconnect'):
+            _to_queue(_SYSMONITOR_Q, task)
+            return
 
         # check if it is a failed item
         if task['status'] == int(status.FAILED):
@@ -156,10 +161,11 @@ async def start(
         _log.error(f"{alias} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
-    global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q
+    global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q, _SYSMONITOR_Q
     _TSKMNGR_Q = taskmanager_q
     _AIO_Q = aiohttpclient_q
     _HARDWARE_Q = hardware_q
+    _SYSMONITOR_Q = sysmonitor_q
     _AIOSQLITE_Q = multiprocessing.Queue()
 
     if loop:
@@ -175,14 +181,21 @@ async def start(
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if task:
-                        
+
+                        if 'api_disconnect' in list(task.keys()):
+                            asyncio.create_task(_delegator(semaphore=semaphore, task=task))
+                            continue
+
                         if 'status' not in list(task.keys()):
                             task.update({
                                     'status': status.PENDING,
                                     'task_id': sha256(f"{task['topic']}{task['payload']}".encode('utf-8')).hexdigest()
                                 })
-                            
-                        _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
+                            _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
+                        elif task['status'] == status.FAILED:
+                            _log.debug(f"{alias} received failed item from queue: {task['task_id']}".capitalize())
+                        else:
+                            _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
 
                         # NOTE: this block of code currently serves no purpose (unimplemented)
                         # assign a priority for the task

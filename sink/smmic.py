@@ -172,13 +172,13 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
             await asyncio.sleep(0.25)
 
     except Exception as e:
-        _log.error(f"Parent process called exception: {str(e)}")
+        _log.error(f"Parent process called {type(e).__name__} exception: {str(e.__cause__)}")
         raise SystemExit()
 
 # create a new event loop and then run the main process within that loop
 def run(core_status: int, api_status: int | None):
     if api_status == status.DISCONNECTED:
-            _log.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
+        _log.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
     elif api_status == status.FAILED:
         _log.warning("API Health check returned with failure, proceeding with API fail protocols")
 
