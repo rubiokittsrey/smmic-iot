@@ -40,6 +40,11 @@ class status:
     DISCONNECTED = 0
     FAILED = ERROR
 
+    # TASK STATUS
+    PENDING = 1
+    RUNNING = 2
+    COMPLETE = 3
+
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
 def log_config(logger) -> _logging.Logger:
@@ -472,7 +477,7 @@ def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any) -> Tuple[int,
     except Exception as e:
         buffer = data
         _logs.error(f"Unhandled exception raised while putting items to queue ({name}): {str(e)}")
-    
+
     return result, buffer
 
 # helper class with functions for handling common exceptions

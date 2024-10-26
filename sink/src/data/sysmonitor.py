@@ -13,7 +13,7 @@ from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import log_config, is_num
+from utils import log_config, is_num, get_from_queue
 from settings import APPConfigurations, Topics
 
 _log = log_config(logging.getLogger(__name__))
@@ -136,7 +136,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
     return mem_f, swap_f
 
 # start this module / coroutine
-async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing.Queue) -> None:
+async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing.Queue, api_init_stat: int) -> None:
     # verify existence of event loop
     loop = None
     try:
@@ -154,15 +154,13 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
                 #_coroutines = []
                 asyncio.create_task(_put_to_queue(tskmngr_queue))
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
-                try:
-                    while True:
-                        msg = await loop.run_in_executor(pool, _from_sys_queue, sys_queue)
-                        if msg:
-                            #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
-                            asyncio.create_task(_update_values(topic=msg['topic'], value=int(msg['payload'])))
+                while True:
+                    item = await loop.run_in_executor(pool, get_from_queue, sys_queue, __name__)
 
-                        await asyncio.sleep(0.05)
-                except (asyncio.CancelledError, KeyboardInterrupt):
-                    raise
+                    if item:
+                        #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
+                        asyncio.create_task(_update_values(topic=item['topic'], value=int(item['payload'])))
+
+                    await asyncio.sleep(0.05)
         except KeyboardInterrupt or asyncio.CancelledError:
             raise

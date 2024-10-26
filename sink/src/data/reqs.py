@@ -9,12 +9,12 @@ import asyncio
 import time
 import logging
 import os
-from typing import Dict, Any, Callable, List, Tuple
+from typing import Dict, Any, Callable, List, Tuple, Any
 from decimal import Decimal
 
 # internal helpers, configs
 from settings import APPConfigurations
-from utils import log_config
+from utils import log_config, status
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -28,25 +28,24 @@ def _req(func: Callable) -> Any:
 
         retries: int = kwargs.get('retries', APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES)
 
-        res_stat: int = 0
-        res_body: dict | None = None
-        err: List[str] = []
+        stat: int = 0
+        result: Any | None = None
+        err_logs: List[str] = []
+        errs : List[Any] = []
 
         while attempt < retries:
             try:
-                res_stat, res_body = await func(*args, **kwargs)
+                stat, result = await func(*args, **kwargs)
                 end = time.time()
                 break
                 #return response
-            except aiohttp.ClientConnectionError as e:
-                await asyncio.sleep(3) # sleep for 3 secs (non-blocking) to allow connection to establish
-                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
-            except aiohttp.ClientResponseError as e:
-                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
-            except aiohttp.ClientError as e:
-                err.append(f"Exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
+            except (aiohttp.ClientConnectorError, aiohttp.ClientResponseError, aiohttp.ClientError, aiohttp.ClientConnectionError) as e:
+                if type(e) in [aiohttp.ClientConnectorError, aiohttp.ClientConnectionError]:
+                    await asyncio.sleep(3) # sleep for 3 secs (non-blocking) to allow connection to establish
+                err_logs.append(f"Exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(e.__cause__)}")
+                errs.append(e)
             except Exception as e:
-                err.append(f"Unhandled exception {type(e).__name__} raised at requests.{func.__name__}: {str(e)}")
+                err_logs.append(f"Unhandled exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(e.__cause__)}")
             # except aiohttp.ClientTimeout as e:
             #     print(f"Timeout error occurred: {e}")
 
@@ -55,24 +54,35 @@ def _req(func: Callable) -> Any:
         end = time.time()
 
         # organize similar errors into one log
-        if len(err) > 0:
-            _logged: List[str] = []
+        if len(err_logs) > 0:
+            logged: List[str] = []
 
-            for e in err:
-                if e in _logged:
+            for e in err_logs:
+                if e in logged:
                     pass
                 else:
-                    count = err.count(e)
+                    count = err_logs.count(e)
                     _log.error((f"({count}) " if count > 1 else "") + e + " ")
-                    _logged.append(e)
+                    logged.append(e)
 
         # if err length == retries, request failed
-        if len(err) == retries:
+        if len(err_logs) == retries:
             _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
+            stat = status.FAILED
+
+            # if the request fails, log the name of the errors into err_names and then assign to 'result'
+            err_names : List[str] = []
+            for e in errs:
+                if type(e).__name__ in err_names:
+                    pass
+                else:
+                    err_names.append(type(e).__name__)
+            result = err_names
+
         else:
             _log.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
-        
-        return res_stat, res_body
+
+        return stat, result
     
     return _wrapper
 

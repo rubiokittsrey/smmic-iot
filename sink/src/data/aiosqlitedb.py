@@ -12,10 +12,12 @@ import inspect
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Union
+from datetime import datetime
 
 # internal helpers, configurations
 from settings import APPConfigurations, Topics, Broker
 from utils import log_config, get_from_queue, SinkData, SensorData, status
+import aiohttpclient
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -228,14 +230,27 @@ class Schema:
     class Unsynced:
 
         @staticmethod #TODO
-        def serialize_from_map(data: Dict):
-            pass
+        def compose_insert(data: Dict) -> str:
+            fields = Schema.Unsynced.fields
+            val_arr = []
+
+            for field in fields:
+                if field == 'task_id':
+                    val_arr.append(data['task_id'])
+                elif field == 'timestamp':
+                    val_arr.append(str(datetime.now()))
+                else:
+                    val_arr.append(data[field])
+
+            c_final = f"INSERT INTO UnsyncedData ({', '.join(fields)}) VALUES ({', '.join([repr(value) for value in val_arr])})"
+            
+            return c_final
 
         @staticmethod
         def create_table() -> str:
             c_final = """
                 CREATE TABLE IF NOT EXISTS UnsyncedData (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT PRIMARY KEY,
                     topic VARCHAR(50) NOT NULL,
                     origin TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
@@ -244,11 +259,22 @@ class Schema:
 
             return c_final
 
+        fields = [
+            'task_id',
+            'topic',
+            'origin',
+            'timestamp',
+            'payload'
+        ]
+
 # sql writer
 def _composer(data: Any) -> str:
-
+    
     sql = None
-    if data['topic'] == Topics.SINK_DATA:
+    if data['to_unsynced']:
+        sql = Schema.Unsynced.compose_insert(data)
+
+    elif data['topic'] == Topics.SINK_DATA:
         sql = Schema.SinkData.compose_insert(SinkData.from_payload(data['payload']))
 
     elif data['topic'] == Topics.SENSOR_DATA:
@@ -262,26 +288,39 @@ async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock,
     sql = _composer(data)
     if not sql:
         return
-    
+
     # if topic contains 'data'
     # use write_lock
     # TODO: this condition could be better
     err: List[str] = []
-    if data['topic'].count('data') > 0:
-        async with write_lock:
-            for _ in range (3):
-                try:
-                    await db_connection.execute(sql)
-                    await db_connection.commit()
-                    break
-                except aiosqlite.OperationalError as e:
-                    err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
-                    await asyncio.sleep(1)
-            # TODO: implement dumping data to a dump file when the sql command fails
-    else:
-        # TODO: implement read
-        async with read_semaphore:
-            pass
+    #_log.debug(f"{__name__} executing: {sql}".capitalize())
+    async with write_lock:
+        for _ in range (3):
+            try:
+                await db_connection.execute(sql)
+                await db_connection.commit()
+                break
+            except aiosqlite.OperationalError as e:
+                err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
+                await asyncio.sleep(1)
+            except Exception as e:
+                err.append(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
+    # if data['topic'].count('data') > 0:
+    #     _log.debug(f"{__name__} executing: {sql}".capitalize())
+    #     async with write_lock:
+    #         for _ in range (3):
+    #             try:
+    #                 await db_connection.execute(sql)
+    #                 await db_connection.commit()
+    #                 break
+    #             except aiosqlite.OperationalError as e:
+    #                 err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
+    #                 await asyncio.sleep(1)
+    #         # TODO: implement dumping data to a dump file when the sql command fails
+    # else:
+    #     # TODO: implement read
+    #     async with read_semaphore:
+    #         pass
 
     # organize similar errors into one log
     if len(err) > 0:
@@ -302,7 +341,7 @@ async def init() -> int:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Failed to acquire event loop {os.getpid()} ({__name__}): {str(e)}")
+        _log.error(f"{__name__} failed to acquire event loop: {str(e)}".capitalize())
 
     # generate schemas
     try:
@@ -377,6 +416,7 @@ async def start(queue: multiprocessing.Queue) -> None:
 
         # cleanup
         for t in tasks:
+            # TODO: implement dump to file
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 

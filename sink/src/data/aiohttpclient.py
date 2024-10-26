@@ -17,10 +17,10 @@ import time
 import multiprocessing
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Tuple, List
 
 # internal core modules
-import reqs as reqs
+import reqs
 
 # internal helpers, configurations
 from utils import log_config, SinkData, SensorData, get_from_queue, SensorAlerts, status, put_to_queue
@@ -30,7 +30,7 @@ _log = log_config(logging.getLogger(__name__))
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
-async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aiohttp.ClientSession) -> Any:
+async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aiohttp.ClientSession, taskmanager_q: multiprocessing.Queue) -> Any:
     # NOTE:
     # ----- data keys -> {priorty, topic, payload, timestamp}
     # ----- (sensor alert) data keys -> {device_id, timestamp, alertCode}
@@ -42,25 +42,34 @@ async def _router(semaphore: asyncio.Semaphore, data: Dict, client_session: aioh
         return
 
     stat: int
-    res_body: Any
+    result: Any
     async with semaphore:
-        if data['topic'] == '/dev/test':
+        if task['topic'] == '/dev/test':
             foo = 'foo'
 
-        if data['topic'] == Topics.SENSOR_DATA:
-            req_body = SensorData.map_sensor_payload(payload=data['payload'], no_payload=True)
-            stat, res_body = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_DATA, data=req_body)
+        if task['topic'] == Topics.SENSOR_DATA:
+            req_body = SensorData.map_sensor_payload(payload=task['payload'], no_payload=True)
+            stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_DATA, data=req_body)
 
-        if data['topic'] == Topics.SINK_DATA:
-            req_body = SinkData.map_sink_payload(data['payload'])
-            stat, res_body = await reqs.post_req(session=client_session, url=APIRoutes.SINK_DATA, data=req_body)
+        if task['topic'] == Topics.SINK_DATA:
+            req_body = SinkData.map_sink_payload(task['payload'])
+            stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SINK_DATA, data=req_body)
 
-        if data['topic'] == Topics.SENSOR_ALERT:
-            req_body = SensorAlerts.map_sensor_alert(data['payload'])
+        if task['topic'] == Topics.SENSOR_ALERT:
+            req_body = SensorAlerts.map_sensor_alert(task['payload'])
 
             if req_body:
-                stat, res_body = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_ALERT, data=req_body)
+                stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_ALERT, data=req_body)
 
+        if stat != status.SUCCESS:
+            task.update({'status': status.FAILED, 'origin': alias, 'cause': result})
+
+            # dont block thread
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor() as pool:
+                loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task)
+
+        return
 
 # checks api health with the /health end point
 # returns:
@@ -136,23 +145,11 @@ async def start(aiohttpclient_q: multiprocessing.Queue, taskmanager_q: multiproc
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    item = await loop.run_in_executor(pool, get_from_queue, aiohttpclient_q, __name__) # non-blocking message retrieval
-
-                    # periodic api_check
-                    # if _API_STATUS != status.CONNECTED and not check_running:
-                    #     check_res = await loop.run_in_executor(pool, api_check)
-                    #     check_running = True
-                    #     _API_STATUS = status.CONNECTED if check_res == status.SUCCESS else status.DISCONNECTED
+                    task = await loop.run_in_executor(pool, get_from_queue, aiohttpclient_q, __name__) # non-blocking message retrieval
 
                     # if an item is retrieved
-                    if item:
-                        if _API_STATUS == status.CONNECTED:
-                            #_log.debug(f"aioHTTPClient @ PID {os.getpid()} received message from queue (topic: {item['topic']})")
-                            asyncio.create_task(_router(semaphore, item, client))
-                        else:
-                            item.update({'failed': True})
-                            # TODO: implement task storing and append results
-                            result = loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, item)
+                    if task:
+                        asyncio.create_task(_router(semaphore, task, client, taskmanager_q))
 
                     await asyncio.sleep(0.1)
 

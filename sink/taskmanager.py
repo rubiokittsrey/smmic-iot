@@ -12,13 +12,14 @@ import logging
 import os
 import random
 import heapq
+from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Dict
 
 # internal helpers, configs
-from utils import log_config, set_priority, priority, get_from_queue, SensorAlerts
+from utils import log_config, set_priority, priority, get_from_queue, SensorAlerts, status
 from settings import APPConfigurations, Topics, Broker
-from src.data import sysmonitor, aiosqlitedb
+from src.data import sysmonitor, aiosqlitedb, aiohttpclient
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -53,7 +54,7 @@ async def _dev_test_task(data: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def _delegator(semaphore: asyncio.Semaphore, data: Dict) -> Any:
+async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
     # topics that need to be handled by the hardware module
@@ -65,34 +66,43 @@ async def _delegator(semaphore: asyncio.Semaphore, data: Dict) -> Any:
 
     async with semaphore:
 
-        data_keys = list(data.keys())
-
-        if data['topic'] in test_topics:
-            await _dev_test_task(data)
-
-        if data['topic'] in aiosqlite_queue_topics:
-            _to_queue(_AIOSQLITE_Q, data)
-
-        if data['topic'] in aiohttp_queue_topics:
-            _to_queue(_AIO_Q, data)
-                # TODO: refactor to implement proper return value
-
-        if data['topic'] in hardware_queue_topics:
-            _to_queue(_HARDWARE_Q, data)
-    
-        # sensor alert handling
-        if data['topic'] == Topics.SENSOR_ALERT:
-            alert_mapped = SensorAlerts.map_sensor_alert(data['payload'])
-            if not alert_mapped:
-                # TODO: handle error scenario
-                return
+        # check if it is a failed item
+        if task['status'] == int(status.FAILED):
+            #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
             
-            #TODO: handle alert code == 0 (DISCONNECTED)
-            if alert_mapped['alert_code'] == SensorAlerts.CONNECTED:
-                pass
-            
-            if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                _se_disconn_handler(alert_mapped, _HARDWARE_Q)
+            # if the topic is from the aiohttp client, it is unsynced data
+            if task['origin'] == aiohttpclient.alias:
+                _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': True})
+            # if task['origin'] == aiohttpclient.alias:
+            #     return
+
+        else:
+            if task['topic'] in test_topics:
+                await _dev_test_task(task)
+
+            if task['topic'] in aiosqlite_queue_topics:
+                _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': False})
+
+            if task['topic'] in aiohttp_queue_topics:
+                _to_queue(_AIO_Q, task)
+                    # TODO: refactor to implement proper return value
+
+            if task['topic'] in hardware_queue_topics:
+                _to_queue(_HARDWARE_Q, task)
+        
+            # sensor alert handling
+            if task['topic'] == Topics.SENSOR_ALERT:
+                alert_mapped = SensorAlerts.map_sensor_alert(task['payload'])
+                if not alert_mapped:
+                    # TODO: handle error scenario
+                    return
+
+                #TODO: handle alert code == 0 (DISCONNECTED)
+                if alert_mapped['alert_code'] == SensorAlerts.CONNECTED:
+                    pass
+                
+                if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
+                    _se_disconn_handler(alert_mapped, _HARDWARE_Q)
 
 # args:
 # data - mapped alert data from mqtt message
@@ -165,7 +175,14 @@ async def start(
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
                     if task:
-                        _log.debug(f"{alias} received item from queue: {task}".capitalize())
+                        
+                        if 'status' not in list(task.keys()):
+                            task.update({
+                                    'status': status.PENDING,
+                                    'task_id': sha256(f"{task['topic']}{task['payload']}".encode('utf-8')).hexdigest()
+                                })
+                            
+                        _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
 
                         # NOTE: this block of code currently serves no purpose (unimplemented)
                         # assign a priority for the task
@@ -175,7 +192,7 @@ async def start(
                             #_log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
-                        asyncio.create_task(_delegator(semaphore=semaphore, data=task))
+                        asyncio.create_task(_delegator(semaphore=semaphore, task=task))
 
                     await asyncio.sleep(0.05)
                     
