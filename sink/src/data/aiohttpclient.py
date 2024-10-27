@@ -44,22 +44,18 @@ async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aioh
     stat: int
     result: Any
     async with semaphore:
+
         if task['topic'] == '/dev/test':
             foo = 'foo'
-
-        if task['topic'] == Topics.SENSOR_DATA:
+        elif task['topic'] == Topics.SENSOR_DATA:
             req_body = SensorData.map_sensor_payload(payload=task['payload'], no_payload=True)
             stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_DATA, data=req_body)
-
-        if task['topic'] == Topics.SINK_DATA:
+        elif task['topic'] == Topics.SINK_DATA:
             req_body = SinkData.map_sink_payload(task['payload'])
             stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SINK_DATA, data=req_body)
-
-        if task['topic'] == Topics.SENSOR_ALERT:
+        elif task['topic'] == Topics.SENSOR_ALERT:
             req_body = SensorAlerts.map_sensor_alert(task['payload'])
-
-            if req_body:
-                stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_ALERT, data=req_body)
+            stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_ALERT, data=req_body)
 
         if stat != status.SUCCESS:
             task.update({'status': status.FAILED, 'origin': alias, 'cause': result})
@@ -118,7 +114,7 @@ async def api_check() -> int:
 
 # TODO: documentation
 _API_STATUS : int = status.DISCONNECTED
-async def start(aiohttpclient_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, api_init_status: int) -> None:
+async def start(aiohttpclient_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
@@ -129,14 +125,7 @@ async def start(aiohttpclient_q: multiprocessing.Queue, taskmanager_q: multiproc
     except Exception as e:
         _log.error(f"Failed to acquire event loop (exception: {type(e).__name__}): {str(e)}")
         return
-
-    # init api connection status
-    global _API_STATUS
-    if api_init_status == status.SUCCESS:
-        _API_STATUS = status.CONNECTED
-    else:
-        _API_STATUS = status.DISCONNECTED
-
+    
     # acquire a aiohttp.ClientSession object
     # in order to allow non-blocking http requests to execute
     client: aiohttp.ClientSession | None = None
@@ -149,7 +138,6 @@ async def start(aiohttpclient_q: multiprocessing.Queue, taskmanager_q: multiproc
     if loop and client:
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
 
-        check_running = False # flag if api check is currently running
         try:
             with ThreadPoolExecutor() as pool:
                 while True:

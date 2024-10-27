@@ -55,7 +55,7 @@ async def _dev_test_task(data: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
+async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = status.UNVERIFIED) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
     # topics that need to be handled by the hardware module
@@ -66,15 +66,17 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
     test_topics = ['/dev/test']
 
     async with semaphore:
-        
+
+        # if the task is an api_disconnect trigger, forward to the correct queue
         if list(task.keys()).count('api_disconnect'):
-            _to_queue(_SYSMONITOR_Q, task)
+            if task['api_disconnect']:
+                _to_queue(_SYSMONITOR_Q, task)
             return
 
         # check if it is a failed item
         if task['status'] == int(status.FAILED):
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
-            
+
             # if the topic is from the aiohttp client, it is unsynced data
             if task['origin'] == aiohttpclient.alias:
                 _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': True})
@@ -89,8 +91,10 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
                 _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': False})
 
             if task['topic'] in aiohttp_queue_topics:
-                _to_queue(_AIO_Q, task)
-                    # TODO: refactor to implement proper return value
+                if api_stat == status.DISCONNECTED:
+                    _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': True, 'origin': aiohttpclient.alias})
+                else:
+                    _to_queue(_AIO_Q, task)
 
             if task['topic'] in hardware_queue_topics:
                 _to_queue(_HARDWARE_Q, task)
@@ -146,7 +150,8 @@ async def start(
         taskmanager_q: multiprocessing.Queue,
         aiohttpclient_q: multiprocessing.Queue,
         hardware_q: multiprocessing.Queue,
-        sysmonitor_q: multiprocessing.Queue
+        sysmonitor_q: multiprocessing.Queue,
+        api_stat: int
         ) -> None:
     # testing out this semaphore count
     # if the system experiences delay or decrease in performance, try to lessen this amount
@@ -167,6 +172,11 @@ async def start(
     _HARDWARE_Q = hardware_q
     _SYSMONITOR_Q = sysmonitor_q
     _AIOSQLITE_Q = multiprocessing.Queue()
+    
+    # api status flag
+    api_status = status.DISCONNECTED
+    if api_stat == status.SUCCESS:
+        api_status = status.CONNECTED
 
     if loop:
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
@@ -182,9 +192,16 @@ async def start(
                     # TODO: implement task handling for different types of messages
                     if task:
 
+                        # if the task is an api disconnect trigger
                         if 'api_disconnect' in list(task.keys()):
-                            asyncio.create_task(_delegator(semaphore=semaphore, task=task))
-                            continue
+                            # assign proper status value to flag
+                            if task['api_disconnect']:
+                                api_status = status.DISCONNECTED
+                                asyncio.create_task(_delegator(semaphore=semaphore, task=task))
+                                continue
+                            else:
+                                api_status = status.CONNECTED
+                                continue
 
                         if 'status' not in list(task.keys()):
                             task.update({
@@ -205,7 +222,7 @@ async def start(
                             #_log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
-                        asyncio.create_task(_delegator(semaphore=semaphore, task=task))
+                        asyncio.create_task(_delegator(semaphore=semaphore, task=task, api_stat=api_status)) # pass api status flag to delegator
 
                     await asyncio.sleep(0.05)
                     

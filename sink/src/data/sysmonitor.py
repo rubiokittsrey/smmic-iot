@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
 from aiohttpclient import api_check
-from utils import log_config, is_num, get_from_queue, status
+from utils import log_config, is_num, get_from_queue, status, put_to_queue
 from settings import APPConfigurations, Topics
 
 _log = log_config(logging.getLogger(__name__))
@@ -28,6 +28,9 @@ _MESSAGES_SENT : int = 0
 _MESSAGES_RECEIVED : int = 0
 # _FREE_MEMORY : int = 0
 
+# the periodic check flag that is set to True when
+# the periodic check method is already currently running
+# and false if not
 _PERIODIC_CHK_FLAG: bool = False
 
 async def _update_values(topic : str, value : int) -> None:
@@ -138,16 +141,22 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 
     return mem_f, swap_f
 
+# periodically check the api with the api_check() method from aiohttpclient and only return if the status
+# should await on startup if init system check returned with api disconnect
+# if api disconnect is triggered by the system in the middle of operation (not right after startup) no_wait_start should be True
+# to allow immediate checking. wait should only apply after *that* first no wait run
 async def _periodic_api_chk(no_wait_start = False) -> int:
-    await_time = 1800 # await time in seconds, 5 minutes
+    await_time = 1800 # await time in seconds, 30 minutes
     mod_name = list(__name__.split('.'))[len(__name__.split('.')) - 1]
     chk_res: int = status.UNVERIFIED
 
-    _log.info(f"{mod_name} running periodic API check".capitalize())
+    _log.info(f"{mod_name} running periodic API check{' (no wait start)' if no_wait_start else ''}".capitalize())
+    attempt_count = 0
     try:
         while not chk_res == status.CONNECTED:
-            # sleep first
-            if not no_wait_start:
+            # check no wait start condition
+            # and always await after first attempt
+            if not no_wait_start or attempt_count > 0:
                 await asyncio.sleep(await_time) # every 30 minutes
 
             chk_res = await api_check()
@@ -155,16 +164,17 @@ async def _periodic_api_chk(no_wait_start = False) -> int:
             if chk_res == status.SUCCESS:
                 break
             else:
-                _log.warning(f"{mod_name} periodic API check returned with status.DISCONNECTED (retrying again in {await_time / 60} minutes)".capitalize())
-    
+                attempt_count += 1
+                _log.warning(f"{mod_name} periodic API check result -> status.DISCONNECTED ({attempt_count} attempt(s), retrying again in {await_time / 60} minutes)".capitalize())
+
     except (KeyboardInterrupt, asyncio.CancelledError):
         return
-    
+
     _log.info(f"{mod_name} periodic API check returned with status.CONNECTED".capitalize())
     return status.CONNECTED
 
 # start this module / coroutine
-async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing.Queue, api_init_stat: int) -> None:
+async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, api_init_stat: int) -> None:
     # verify existence of event loop
     loop = None
     try:
@@ -180,13 +190,17 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
             # TODO: handle task cancellation of this
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
-                asyncio.create_task(_put_to_queue(tskmngr_queue))
+                asyncio.create_task(_put_to_queue(taskmanager_q))
+                global _PERIODIC_CHK_FLAG
 
+                # NOTE: this code (and the code inside the while loop)
+                # naively assumes that when the _periodic_api_chk method ends, the connection is established
+                # if an exception is called from that function or within the chain of functions that run this protocol
                 if api_init_stat in [status.DISCONNECTED, status.FAILED]:
-                    global _PERIODIC_CHK_FLAG
                     _PERIODIC_CHK_FLAG = True
                     init_chk = asyncio.create_task(_periodic_api_chk())
                     init_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
+                    init_chk.add_done_callback(lambda f: loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, {'api_disconnect': False}))
 
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
                 while True:
@@ -199,13 +213,14 @@ async def start(sys_queue: multiprocessing.Queue, tskmngr_queue: multiprocessing
                                 _PERIODIC_CHK_FLAG = True
                                 while_run_chk = asyncio.create_task(_periodic_api_chk(no_wait_start=True))
                                 while_run_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
+                                while_run_chk.add_done_callback(lambda f: loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, {'api_disconnect': False}))
                         else:
                             #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
                             asyncio.create_task(_update_values(topic=item['topic'], value=int(item['payload'])))
 
                     await asyncio.sleep(0.05)
 
-        except KeyboardInterrupt or asyncio.CancelledError:
+        except (KeyboardInterrupt, asyncio.CancelledError):
             return
 
         except Exception as e:

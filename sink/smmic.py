@@ -102,6 +102,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'aiohttpclient_q': aio_queue,
         'hardware_q': hardware_queue,
         'sysmonitor_q': sys_queue,
+        'api_stat': api_status
     }
 
     aiohttp_client_kwargs = {
@@ -109,7 +110,6 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'sub_proc': aiohttpclient.start,
         'aiohttpclient_q': aio_queue,
         'taskmanager_q': task_queue,
-        'api_init_status': api_status
     }
 
     hardware_kwargs = {
@@ -148,7 +148,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
         tasks.append(asyncio.create_task(client.start_client(handler.msg_callback)))
         # start the system monitor queue
-        tasks.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, tskmngr_queue=task_queue, api_init_stat=api_status)))
+        tasks.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, taskmanager_q=task_queue, api_init_stat=api_status)))
 
         # shutdown and cleanup
         try:
