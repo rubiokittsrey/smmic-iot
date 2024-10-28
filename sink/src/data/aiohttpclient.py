@@ -48,7 +48,7 @@ async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aioh
         if task['topic'] == '/dev/test':
             foo = 'foo'
         elif task['topic'] == Topics.SENSOR_DATA:
-            req_body = SensorData.map_sensor_payload(payload=task['payload'], no_payload=True)
+            req_body = SensorData.map_sensor_payload(payload=task['payload'])
             stat, result = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_DATA, data=req_body)
         elif task['topic'] == Topics.SINK_DATA:
             req_body = SinkData.map_sink_payload(task['payload'])

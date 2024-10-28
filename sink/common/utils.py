@@ -303,13 +303,13 @@ class SensorData:
                 temperature=b_map['temperature'],
                 battery_level=b_map['battery_level']
             )
-            b_map.update({'data_obj': readings})
+            b_map.update({'readings': readings})
         
         f_map = {
             'sensor_type': b_map['sensor_type'],
             'device_id': b_map['device_id'],
             'payload': b_map['payload'],
-            'data_obj': b_map['data_obj'],
+            'readings': b_map['readings'],
             'timestamp': b_map['timestamp']
         }
 

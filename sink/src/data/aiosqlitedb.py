@@ -278,7 +278,7 @@ def _composer(data: Any) -> str:
         sql = Schema.SinkData.compose_insert(SinkData.from_payload(data['payload']))
 
     elif data['topic'] == Topics.SENSOR_DATA:
-        sql = Schema.SensorData.compose_insert(SinkData.from_payload(data['payload']))
+        sql = Schema.SensorData.compose_insert(SensorData.from_payload(data['payload']))
 
     return sql
 
