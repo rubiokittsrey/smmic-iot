@@ -268,7 +268,7 @@ class Schema:
         ]
 
 # sql writer
-def _composer(data: Any) -> str:
+def _composer(data: Any) -> str | None:
     
     sql = None
     if data['to_unsynced']:

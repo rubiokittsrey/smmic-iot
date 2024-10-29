@@ -23,13 +23,6 @@ from src.data import sysmonitor, aiosqlitedb, aiohttpclient
 
 _log = log_config(logging.getLogger(__name__))
 
-# queue constants
-_TSKMNGR_Q: multiprocessing.Queue
-_AIO_Q: multiprocessing.Queue
-_HARDWARE_Q: multiprocessing.Queue
-_AIOSQLITE_Q: multiprocessing.Queue
-_SYSMONITOR_Q: multiprocessing.Queue
-
 # unimplemented priority class for tasks
 # not sure how to implement this yet
 # TODO: look into task prioritization
@@ -55,7 +48,14 @@ async def _dev_test_task(data: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = status.UNVERIFIED) -> Any:
+async def _delegator(semaphore: asyncio.Semaphore,
+                     task: Dict,
+                     sysmonitor_q: multiprocessing.Queue,
+                     aiosqlite_q: multiprocessing.Queue,
+                     aiohttpclient_q: multiprocessing.Queue,
+                     hardware_q: multiprocessing.Queue,
+                     api_stat: int = status.UNVERIFIED,
+                     ) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
     # topics that need to be handled by the hardware module
@@ -70,7 +70,7 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = s
         # if the task is an api_disconnect trigger, forward to the correct queue
         if list(task.keys()).count('api_disconnect'):
             if task['api_disconnect']:
-                _to_queue(_SYSMONITOR_Q, task)
+                _to_queue(sysmonitor_q, task)
             return
 
         # check if it is a failed item
@@ -79,7 +79,7 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = s
 
             # if the topic is from the aiohttp client, it is unsynced data
             if task['origin'] == aiohttpclient.alias:
-                _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': True})
+                _to_queue(aiosqlite_q, {**task, 'to_unsynced': True})
             # if task['origin'] == aiohttpclient.alias:
             #     return
 
@@ -88,16 +88,16 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = s
                 await _dev_test_task(task)
 
             if task['topic'] in aiosqlite_queue_topics:
-                _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': False})
+                _to_queue(aiosqlite_q, {**task, 'to_unsynced': False})
 
             if task['topic'] in aiohttp_queue_topics:
                 if api_stat == status.DISCONNECTED:
-                    _to_queue(_AIOSQLITE_Q, {**task, 'to_unsynced': True, 'origin': aiohttpclient.alias})
+                    _to_queue(aiosqlite_q, {**task, 'to_unsynced': True, 'origin': aiohttpclient.alias})
                 else:
-                    _to_queue(_AIO_Q, task)
+                    _to_queue(aiohttpclient_q, task)
 
             if task['topic'] in hardware_queue_topics:
-                _to_queue(_HARDWARE_Q, task)
+                _to_queue(hardware_q, task)
         
             # sensor alert handling
             if task['topic'] == Topics.SENSOR_ALERT:
@@ -111,7 +111,7 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict, api_stat: int = s
                     pass
                 
                 if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                    _se_disconn_handler(alert_mapped, _HARDWARE_Q)
+                    _se_disconn_handler(alert_mapped, hardware_q)
 
 # args:
 # data - mapped alert data from mqtt message
@@ -166,27 +166,29 @@ async def start(
         _log.error(f"{alias} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
-    global _TSKMNGR_Q, _AIO_Q, _HARDWARE_Q, _AIOSQLITE_Q, _SYSMONITOR_Q
-    _TSKMNGR_Q = taskmanager_q
-    _AIO_Q = aiohttpclient_q
-    _HARDWARE_Q = hardware_q
-    _SYSMONITOR_Q = sysmonitor_q
-    _AIOSQLITE_Q = multiprocessing.Queue()
-    
+    aiosqlite_q = multiprocessing.Queue()
+
     # api status flag
     api_status = status.DISCONNECTED
     if api_stat == status.SUCCESS:
         api_status = status.CONNECTED
 
+    queues_kwargs = {
+        'sysmonitor_q': sysmonitor_q,
+        'aiohttpclient_q':aiohttpclient_q,
+        'hardware_q': hardware_q,
+        'aiosqlite_q': aiosqlite_q
+    }
+
     if loop:
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            aiosqlitedb_t = asyncio.create_task(aiosqlitedb.start(_AIOSQLITE_Q))
+            aiosqlitedb_t = asyncio.create_task(aiosqlitedb.start(aiosqlite_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    task = await loop.run_in_executor(pool, get_from_queue, _TSKMNGR_Q, __name__)
+                    task = await loop.run_in_executor(pool, get_from_queue, taskmanager_q, __name__)
 
                     # if a message is retrieved, create a task to handle that message
                     # TODO: implement task handling for different types of messages
@@ -197,7 +199,7 @@ async def start(
                             # assign proper status value to flag
                             if task['api_disconnect']:
                                 api_status = status.DISCONNECTED
-                                asyncio.create_task(_delegator(semaphore=semaphore, task=task))
+                                asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task))
                                 continue
                             else:
                                 api_status = status.CONNECTED
@@ -222,7 +224,7 @@ async def start(
                             #_log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
                             assigned_p = priority.MODERATE
 
-                        asyncio.create_task(_delegator(semaphore=semaphore, task=task, api_stat=api_status)) # pass api status flag to delegator
+                        asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task, api_stat=api_status)) # pass api status flag to delegator
 
                     await asyncio.sleep(0.05)
                     

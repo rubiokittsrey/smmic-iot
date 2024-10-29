@@ -146,7 +146,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 # if api disconnect is triggered by the system in the middle of operation (not right after startup) no_wait_start should be True
 # to allow immediate checking. wait should only apply after *that* first no wait run
 async def _periodic_api_chk(no_wait_start = False) -> int:
-    await_time = 1800 # await time in seconds, 30 minutes
+    await_time = APPConfigurations.API_DISCON_WAIT # await time in seconds, 30 minutes
     mod_name = list(__name__.split('.'))[len(__name__.split('.')) - 1]
     chk_res: int = status.UNVERIFIED
 

@@ -66,6 +66,7 @@ class APPConfigurations:
     NET_CHECK_INTERVALS = _app_net_configs["network_check_intervals"] * 60
     NETWORK_TIMEOUT : int = _app_net_configs["timeout"]
     NETWORK_MAX_TIMEOUT_RETRIES : int = _app_net_configs["max_connection_timeouts"]
+    API_DISCON_WAIT : int = _settings_yaml['app_configurations']['api_disconnect_await']
 
     # local storage
     LOCAL_STORAGE_DIR : str = _settings_yaml["app_configurations"]["local_storage"]["directory"]
