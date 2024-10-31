@@ -305,22 +305,6 @@ async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock,
                 await asyncio.sleep(1)
             except Exception as e:
                 err.append(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
-    # if data['topic'].count('data') > 0:
-    #     _log.debug(f"{__name__} executing: {sql}".capitalize())
-    #     async with write_lock:
-    #         for _ in range (3):
-    #             try:
-    #                 await db_connection.execute(sql)
-    #                 await db_connection.commit()
-    #                 break
-    #             except aiosqlite.OperationalError as e:
-    #                 err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
-    #                 await asyncio.sleep(1)
-    #         # TODO: implement dumping data to a dump file when the sql command fails
-    # else:
-    #     # TODO: implement read
-    #     async with read_semaphore:
-    #         pass
 
     # organize similar errors into one log
     if len(err) > 0:

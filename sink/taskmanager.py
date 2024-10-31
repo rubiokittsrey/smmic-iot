@@ -54,7 +54,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
                      aiosqlite_q: multiprocessing.Queue,
                      aiohttpclient_q: multiprocessing.Queue,
                      hardware_q: multiprocessing.Queue,
-                     api_stat: int = status.UNVERIFIED,
+                     api_stat: int,
                      ) -> Any:
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
@@ -199,11 +199,13 @@ async def start(
                             # assign proper status value to flag
                             if task['api_disconnect']:
                                 api_status = status.DISCONNECTED
-                                asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task))
-                                continue
+                                asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task, api_stat=api_status))
                             else:
-                                api_status = status.CONNECTED
-                                continue
+                                if api_status != status.CONNECTED:
+                                    api_status = status.CONNECTED
+                                else:
+                                    _log.warning(f"API disconnect trigger ({task['api_disconnect']}) received but api_status == status.CONNECTED")
+                            continue
 
                         if 'status' not in list(task.keys()):
                             task.update({

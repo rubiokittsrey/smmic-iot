@@ -168,7 +168,7 @@ async def _periodic_api_chk(no_wait_start = False) -> int:
                 _log.warning(f"{mod_name} periodic API check result -> status.DISCONNECTED ({attempt_count} attempt(s), retrying again in {await_time / 60} minutes)".capitalize())
 
     except (KeyboardInterrupt, asyncio.CancelledError):
-        return
+        return status.UNVERIFIED
 
     _log.info(f"{mod_name} periodic API check returned with status.CONNECTED".capitalize())
     return status.CONNECTED

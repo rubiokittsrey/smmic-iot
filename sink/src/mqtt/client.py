@@ -187,12 +187,14 @@ async def shutdown_client() -> bool:
     _log.info(f"Shutting down SMMIC callback client at PID: {os.getpid()}")
 
     if _CLIENT_STAT == status.SUCCESS:
+        # disconnect client
         try:
             _log.debug(f"Disconnecting callback client {APPConfigurations.CLIENT_ID} from broker at {Broker.HOST, Broker.PORT}")
             _CALLBACK_CLIENT.disconnect()
         except Exception as e:
             _log.error(f"Unable to disconnect client: {e}, forcing disconnect")
         
+        # stop client
         try:
             _log.debug(f"Terminating callback client loop at PID: {os.getpid()}")
             _CALLBACK_CLIENT.loop_stop()

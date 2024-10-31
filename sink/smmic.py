@@ -191,7 +191,7 @@ def run(core_status: int, api_status: int | None):
         os._exit(0)
 
     # if loop event loop is present, run main()
-    if loop:
+    if loop and api_status:
         main_t = loop.create_task(main(loop, api_status))
         try:
             loop.run_forever()
