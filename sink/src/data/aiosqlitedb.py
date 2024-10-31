@@ -243,7 +243,7 @@ class Schema:
                     val_arr.append(data[field])
 
             c_final = f"INSERT INTO UnsyncedData ({', '.join(fields)}) VALUES ({', '.join([repr(value) for value in val_arr])})"
-            
+
             return c_final
 
         @staticmethod
@@ -267,9 +267,31 @@ class Schema:
             'payload'
         ]
 
+# pushes unsynced data from sqlite to the api
+# puts the unsynced data to the taskamanger queue
+# this should be run as a coroutine
+async def push_unsynced(read_semaphore: asyncio.Semaphore,
+                        write_lock: asyncio.Lock,
+                        taskmanager_q: multiprocessing.Queue
+                        ) -> Any:
+
+    sql = "SELECT * FROM UNSYNCEDDATA"
+
+    async with read_semaphore:
+
+        async with aiosqlite.connect(_DATABASE) as connection:
+            data : Any = None
+            try:
+                cursor = await connection.execute(sql)
+                data = await cursor.fetchall()
+            except aiosqlite.OperationalError as e:
+                _log.error(f"Unhandled {type(e).__name__} raised at {__name__}: {str(e.__cause__)}")
+
+            return data
+
 # sql writer
 def _composer(data: Any) -> str | None:
-    
+
     sql = None
     if data['to_unsynced']:
         sql = Schema.Unsynced.compose_insert(data)
@@ -283,7 +305,7 @@ def _composer(data: Any) -> str | None:
     return sql
 
 # sql executor
-async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, db_connection: aiosqlite.Connection, data: Any):
+async def _executor(write_lock: asyncio.Lock, connection: aiosqlite.Connection, data: Any):
     # compose sql statement
     sql = _composer(data)
     if not sql:
@@ -297,11 +319,11 @@ async def _executor(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock,
     async with write_lock:
         for _ in range (3):
             try:
-                await db_connection.execute(sql)
-                await db_connection.commit()
+                await connection.execute(sql)
+                await connection.commit()
                 break
             except aiosqlite.OperationalError as e:
-                err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e)}")
+                err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e.__cause__)}")
                 await asyncio.sleep(1)
             except Exception as e:
                 err.append(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
@@ -362,7 +384,6 @@ async def start(queue: multiprocessing.Queue) -> None:
         _log.error(f"Unable to get running event loop (exception: {type(e).__name__}): {str(e)}")
         return
 
-    read_semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     write_lock = asyncio.Lock()
     tasks: set[asyncio.Task] = set()
 
@@ -386,9 +407,8 @@ async def start(queue: multiprocessing.Queue) -> None:
                         data = await loop.run_in_executor(pool, get_from_queue, queue, __name__)
 
                         if data:
-                            t = asyncio.create_task(_executor(read_semaphore, write_lock, db, data))
-                            tasks.add(t)
-                            t.add_done_callback(tasks.discard)
+                            task = asyncio.create_task(_executor(write_lock, db, data)).add_done_callback(tasks.discard)
+                            tasks.add(task)
 
                     except Exception as e:
                         _log.error(f"Unhandled exception at {__name__} loop: {str(e)}")
@@ -399,9 +419,9 @@ async def start(queue: multiprocessing.Queue) -> None:
         _log.debug(f"Shutting down {__name__} at PID {os.getpid()}")
 
         # cleanup
-        for t in tasks:
+        for task in tasks:
             # TODO: implement dump to file
-            t.cancel()
+            task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        raise
+        return

@@ -126,12 +126,6 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         processes : List[multiprocessing.Process] = []
         for p_kwargs in kwargs_list:
             processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs, name=p_kwargs['pretty_alias']))
-        # the task manager process handles the message routing of messages received from the mqtt callback client @ client.py
-        # processes.append(multiprocessing.Process(target=run_task_manager, kwargs=task_manager_kwargs))
-        # the aiohttp client process handles requests to and from the api
-        # processes.append(multiprocessing.Process(target=run_aio_client, kwargs={'queue': aio_queue}))
-        # the hardware module process handles hardware tasks received from the mqtt network
-        # processes.append(multiprocessing.Process(target=run_hardware_p, kwargs={'queue': hardware_queue}))
 
         for proc in processes:
             proc.start()
@@ -140,21 +134,21 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         await asyncio.sleep(0.5)
 
         # main process co-routines
-        tasks = []
+        coroutines = []
 
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
         handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
-        tasks.append(asyncio.create_task(client.start_client(handler.msg_callback)))
+        coroutines.append(asyncio.create_task(client.start_client(handler.msg_callback)))
         # start the system monitor queue
-        tasks.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, taskmanager_q=task_queue, api_init_stat=api_status)))
+        coroutines.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, taskmanager_q=task_queue, api_init_stat=api_status)))
 
         # shutdown and cleanup
         try:
-            await asyncio.gather(*tasks)
+            await asyncio.gather(*coroutines)
         except (asyncio.CancelledError, KeyboardInterrupt):
-            _log.warning(f"Main function received KeyboardInterrupt or CancelledError, shutting down operations")
+            _log.warning(f"Main process received {type(e).__name__}, shutting down operations")
 
             for proc in processes:
                 proc.terminate()
@@ -164,7 +158,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
             for proc in processes:
                 proc.join()
 
-            await asyncio.gather(client.shutdown_client(), *tasks)
+            await asyncio.gather(client.shutdown_client(), *coroutines)
             raise
 
         # keep main thread alive

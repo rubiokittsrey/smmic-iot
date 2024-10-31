@@ -43,6 +43,7 @@ async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aioh
 
     stat: int
     result: Any
+    
     async with semaphore:
 
         if task['topic'] == '/dev/test':

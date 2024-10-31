@@ -14,7 +14,7 @@ import random
 import heapq
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Any, Dict
+from typing import Callable, Any, Dict, List, Tuple, Set
 
 # internal helpers, configs
 from utils import (log_config,
@@ -53,7 +53,7 @@ async def _dev_test_task(data: dict) -> None:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
 async def _delegator(semaphore: asyncio.Semaphore,
-                     task: Dict,
+                     data: Dict,
                      sysmonitor_q: multiprocessing.Queue,
                      aiosqlite_q: multiprocessing.Queue,
                      aiohttpclient_q: multiprocessing.Queue,
@@ -61,8 +61,14 @@ async def _delegator(semaphore: asyncio.Semaphore,
                      api_stat: int,
                      ) -> Any:
     
+    # if the task is an api_disconnect trigger, forward to the correct queue
+    if list(data.keys()).count('api_disconnect'):
+        if data['api_disconnect']:
+            _to_queue(sysmonitor_q, data)
+        return
+
     # topics that need to be handled by the aiohttp client (http requests, api calls)
-    aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
+    aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT, Topics.SINK_ALERT]
     # topics that need to be handled by the hardware module
     hardware_queue_topics = [Topics.IRRIGATION] # TODO: implement this
     # topics handled by aiosqlitedb module
@@ -71,50 +77,45 @@ async def _delegator(semaphore: asyncio.Semaphore,
     test_topics = ['/dev/test']
 
     async with semaphore:
+        dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
-        # if the task is an api_disconnect trigger, forward to the correct queue
-        if list(task.keys()).count('api_disconnect'):
-            if task['api_disconnect']:
-                _to_queue(sysmonitor_q, task)
-            return
+        if data['status'] == int(status.FAILED):
 
-        # check if it is a failed item
-        # failed items are handled here
-        if task['status'] == int(status.FAILED):
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
-
-            # if the topic is from the aiohttp client, it is unsynced data
-            if task['origin'] == aiohttpclient.alias:
-                _to_queue(aiosqlite_q, {**task, 'to_unsynced': True})
+            if data['origin'] == aiohttpclient.alias:
+                dest.append((aiosqlite_q, {**data, 'to_unsynced': True}))
 
         else:
-            if task['topic'] in test_topics:
-                await _dev_test_task(task)
 
-            if task['topic'] in aiosqlite_queue_topics:
-                _to_queue(aiosqlite_q, {**task, 'to_unsynced': False})
+            if data['topic'] in test_topics:
+                await _dev_test_task(data)
 
-            if task['topic'] in aiohttp_queue_topics:
+            if data['topic'] in aiosqlite_queue_topics:
+                dest.append((aiosqlite_q, {**data, 'to_unsynced': False}))
+
+            if data['topic'] in aiohttp_queue_topics:
                 if api_stat == status.DISCONNECTED:
-                    _to_queue(aiosqlite_q, {**task, 'to_unsynced': True, 'origin': aiohttpclient.alias})
+                    dest.append((aiosqlite_q, {**data, 'to_unsynced': True, 'origin': alias}))
                 else:
-                    _to_queue(aiohttpclient_q, task)
+                    dest.append((aiohttpclient_q, data))
 
-            if task['topic'] in hardware_queue_topics:
-                _to_queue(hardware_q, task)
+            if data['topic'] in hardware_queue_topics:
+                dest.append((hardware_q, data))
 
-            # sensor alert handling
-            if task['topic'] == Topics.SENSOR_ALERT:
-                alert_mapped = SensorAlerts.map_sensor_alert(task['payload'])
-                if not alert_mapped:
-                    # TODO: handle error scenario
-                    return
+            if data['topic'] == Topics.SENSOR_ALERT:
+                alert = SensorAlerts.map_sensor_alert(data['payload'])
 
-                if alert_mapped['alert_code'] == SensorAlerts.CONNECTED:
+                alert_c = alert['alert_code']
+                if alert_c == SensorAlerts.CONNECTED:
                     pass
+                elif alert_c == SensorAlerts.DISCONNECTED:
+                    dest.append((hardware_q, {**alert, 'disconnected': True}))
+        
+        for queue, f_task in dest:
+            #_log.debug(f"Data put to queue: {queue}")
+            put_to_queue(queue, __name__, f_task)
 
-                if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                    put_to_queue(hardware_q, __name__, {**alert_mapped, 'disconnected': True})
+    return 
 
 # internal helper function that handles putting messages to queue
 # primarily used by the delegator
@@ -167,6 +168,7 @@ async def start(
         'aiosqlite_q': aiosqlite_q
     }
 
+    tasks: Set[asyncio.Task] = set()
     if loop:
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
@@ -175,50 +177,49 @@ async def start(
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    task = await loop.run_in_executor(pool, get_from_queue, taskmanager_q, __name__)
+                    data = await loop.run_in_executor(pool, get_from_queue, taskmanager_q, __name__)
 
-                    # if a message is retrieved, create a task to handle that message
-                    # TODO: implement task handling for different types of messages
-                    if task:
+                    if data:
+                        t_keys = list(data.keys())
 
                         # if the task is an api disconnect trigger
-                        if 'api_disconnect' in list(task.keys()):
+                        if 'api_disconnect' in t_keys:
                             # assign proper status value to flag
-                            if task['api_disconnect']:
+                            if data['api_disconnect']:
                                 api_status = status.DISCONNECTED
-                                asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task, api_stat=api_status))
+                                task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)).add_done_callback(tasks.discard)
+                                tasks.add(task)
                             else:
                                 if api_status != status.CONNECTED:
                                     api_status = status.CONNECTED
                                 else:
-                                    _log.warning(f"API disconnect trigger ({task['api_disconnect']}) received but api_status == status.CONNECTED")
-                            continue
-
-                        log_msg = ''
-                        if 'status' not in list(task.keys()):
-                            task.update({
-                                    'status': status.PENDING,
-                                    'task_id': sha256(f"{task['topic']}{task['payload']}".encode('utf-8')).hexdigest()
-                                })
-                            log_msg = f"{alias} received item from queue: {task['task_id']}".capitalize()
-                        elif task['status'] == status.FAILED:
-                            log_msg = f"{alias} received failed item from queue: {task['task_id']}".capitalize()
+                                    _log.warning(f"API disconnect trigger ({data['api_disconnect']}) received but api_status == status.CONNECTED")
+                        
                         else:
-                            log_msg = f"{alias} received item from queue: {task['task_id']}".capitalize()                        
-                        _log.debug(log_msg)
+                            log_msg = ''
+                            if 'status' not in t_keys:
+                                data.update({
+                                        'status': status.PENDING,
+                                        'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
+                                    })
+                                log_msg = f"{alias} received item from queue: {data['task_id']}".capitalize()
+                            elif data['status'] == status.FAILED:
+                                log_msg = f"{alias} received failed item from queue: {data['task_id']}".capitalize()
+                            else:
+                                log_msg = f"{alias} received item from queue: {data['task_id']}".capitalize()                        
+                            _log.debug(log_msg)
 
-                        # NOTE: this block of code currently serves no purpose (unimplemented)
-                        # assign a priority for the task
-                        assigned_p = set_priority(task['topic'])
-                        # if not priority set to moderate
-                        if not assigned_p:
-                            #_log.debug(f"Cannot assert priority of message from topic: {task['topic']}, setting priority to moderate instead")
-                            assigned_p = priority.MODERATE
-
-                        asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, task=task, api_stat=api_status)) # pass api status flag to delegator
+                            task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)).add_done_callback(tasks.discard) # pass api status flag to delegator
+                            tasks.add(task)
 
                     await asyncio.sleep(0.05)
-                    
+
         except (KeyboardInterrupt, asyncio.CancelledError):
-            # enable await of aiosqlitedb_t
+
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
             loop.run_until_complete(aiosqlitedb_t)
+
+            return

@@ -74,7 +74,7 @@ async def _watcher(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue
                                 _log.warning(f"{__name__}: signal 'ON' received from sensor {device_id} but task already in QUEUE")
                             else:
                                 _QUEUE.append(device_id)
-                        
+
                         if i_task['signal'] == 0:
                             if device_id not in _QUEUE:
                                 _log.warning(f"{__name__}: signal 'OFF' received from sensor {device_id} but id not in QUEUE")
