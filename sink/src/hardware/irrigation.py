@@ -58,35 +58,39 @@ async def _watcher(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue
     global _QUEUE
 
     # start loop
-    while True:
-        # retrieve irrigation task from queue
-        i_task: Dict | None = get_from_queue(queue, __name__)
+    try:
+            while True:
+                # retrieve irrigation task from queue
+                i_task: Dict | None = get_from_queue(queue, __name__)
 
-        if i_task:
-            keys = list(i_task.keys())
-            device_id = i_task['device_id']
+                if i_task:
+                    keys = list(i_task.keys())
+                    device_id = i_task['device_id']
 
-            if 'signal' in keys:
+                    if 'signal' in keys:
 
-                if i_task['signal'] == 1:
-                    if device_id in _QUEUE:
-                        _log.warning(f"{__name__}: signal 'ON' received from sensor {device_id} but task already in QUEUE")
-                    else:
-                        _QUEUE.append(device_id)
-                
-                if i_task['signal'] == 0:
-                    if device_id not in _QUEUE:
-                        _log.warning(f"{__name__}: signal 'OFF' received from sensor {device_id} but id not in QUEUE")
-                    else:
-                        _QUEUE.remove(device_id)
+                        if i_task['signal'] == 1:
+                            if device_id in _QUEUE:
+                                _log.warning(f"{__name__}: signal 'ON' received from sensor {device_id} but task already in QUEUE")
+                            else:
+                                _QUEUE.append(device_id)
+                        
+                        if i_task['signal'] == 0:
+                            if device_id not in _QUEUE:
+                                _log.warning(f"{__name__}: signal 'OFF' received from sensor {device_id} but id not in QUEUE")
+                            else:
+                                _QUEUE.remove(device_id)
 
-            if 'disconnected' in keys:
-                if device_id in _QUEUE:
-                    _QUEUE.remove(device_id)
-                else:
-                    pass
+                    if 'disconnected' in keys:
+                        if device_id in _QUEUE:
+                            _QUEUE.remove(device_id)
+                        else:
+                            pass
 
-        await asyncio.sleep(0.01)
+                await asyncio.sleep(0.01)
+
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        return
 
 # turn on the input on the water pump channel
 def _on(pin):

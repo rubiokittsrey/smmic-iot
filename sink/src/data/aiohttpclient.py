@@ -38,7 +38,7 @@ async def _router(semaphore: asyncio.Semaphore, task: Dict, client_session: aioh
     req_body = Dict | None
 
     if not client_session:
-        _log.error("Error at %s, client_session is empty!", __name__)
+        _log.error(f"Error at {__name__}, client_session is empty!")
         return
 
     stat: int

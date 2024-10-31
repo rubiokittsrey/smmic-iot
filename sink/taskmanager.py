@@ -17,8 +17,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Dict
 
 # internal helpers, configs
-from utils import log_config, set_priority, priority, get_from_queue, SensorAlerts, status
-from settings import APPConfigurations, Topics, Broker
+from utils import (log_config,
+                   set_priority, priority,
+                   get_from_queue, put_to_queue,
+                   SensorAlerts,
+                   status)
+from settings import APPConfigurations, Topics
 from src.data import sysmonitor, aiosqlitedb, aiohttpclient
 
 _log = log_config(logging.getLogger(__name__))
@@ -56,6 +60,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
                      hardware_q: multiprocessing.Queue,
                      api_stat: int,
                      ) -> Any:
+    
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT]
     # topics that need to be handled by the hardware module
@@ -74,14 +79,13 @@ async def _delegator(semaphore: asyncio.Semaphore,
             return
 
         # check if it is a failed item
+        # failed items are handled here
         if task['status'] == int(status.FAILED):
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
 
             # if the topic is from the aiohttp client, it is unsynced data
             if task['origin'] == aiohttpclient.alias:
                 _to_queue(aiosqlite_q, {**task, 'to_unsynced': True})
-            # if task['origin'] == aiohttpclient.alias:
-            #     return
 
         else:
             if task['topic'] in test_topics:
@@ -98,7 +102,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
 
             if task['topic'] in hardware_queue_topics:
                 _to_queue(hardware_q, task)
-        
+
             # sensor alert handling
             if task['topic'] == Topics.SENSOR_ALERT:
                 alert_mapped = SensorAlerts.map_sensor_alert(task['payload'])
@@ -106,28 +110,11 @@ async def _delegator(semaphore: asyncio.Semaphore,
                     # TODO: handle error scenario
                     return
 
-                #TODO: handle alert code == 0 (DISCONNECTED)
                 if alert_mapped['alert_code'] == SensorAlerts.CONNECTED:
                     pass
-                
-                if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
-                    _se_disconn_handler(alert_mapped, hardware_q)
 
-# args:
-# data - mapped alert data from mqtt message
-# hardware_queue - the hardware queue
-def _se_disconn_handler(data: Dict, hardware_queue: multiprocessing.Queue) -> bool:
-    # send an irrigation 'off' signal to the hardware queue
-    se_disconnect = {
-        'device_id': data['device_id'],
-        'disconnected': True
-    }
-    try:
-        hardware_queue.put(se_disconnect)
-        return True
-    except Exception as e:
-        _log.error(f"Failed to put message to queue at PID {os.getpid()} ({__name__}): {str(e)}")
-        return False
+                if alert_mapped['alert_code'] == SensorAlerts.DISCONNECTED:
+                    put_to_queue(hardware_q, __name__, {**alert_mapped, 'disconnected': True})
 
 # internal helper function that handles putting messages to queue
 # primarily used by the delegator
@@ -207,16 +194,18 @@ async def start(
                                     _log.warning(f"API disconnect trigger ({task['api_disconnect']}) received but api_status == status.CONNECTED")
                             continue
 
+                        log_msg = ''
                         if 'status' not in list(task.keys()):
                             task.update({
                                     'status': status.PENDING,
                                     'task_id': sha256(f"{task['topic']}{task['payload']}".encode('utf-8')).hexdigest()
                                 })
-                            _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
+                            log_msg = f"{alias} received item from queue: {task['task_id']}".capitalize()
                         elif task['status'] == status.FAILED:
-                            _log.debug(f"{alias} received failed item from queue: {task['task_id']}".capitalize())
+                            log_msg = f"{alias} received failed item from queue: {task['task_id']}".capitalize()
                         else:
-                            _log.debug(f"{alias} received item from queue: {task['task_id']}".capitalize())
+                            log_msg = f"{alias} received item from queue: {task['task_id']}".capitalize()                        
+                        _log.debug(log_msg)
 
                         # NOTE: this block of code currently serves no purpose (unimplemented)
                         # assign a priority for the task
