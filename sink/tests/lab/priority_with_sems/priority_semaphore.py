@@ -1,12 +1,13 @@
 import asyncio
 from collections import deque
 from bisect import insort_right
+from random import randint
 
 class PrioritySortedDeque(deque):
 
     def __init__(self):
         super().__init__()
-        self.append_priority = 0.0
+        self.append_priority : float = 0.0
 
     def __iter__(self):
         return (i[1] for i in super().__iter__())
@@ -20,23 +21,26 @@ class PrioritySortedDeque(deque):
     def popleft(self):
         return super().popleft()[1]
 
+
 class PrioritySemaphore(asyncio.Semaphore):
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *_):
+        super().__init__(*_)
         self._waiters = PrioritySortedDeque()
 
     def priority(self, priority):
         self._waiters.append_priority = priority
         return self
 
-    async def priority_acquire(self, priority):
+    async def priority_acquire(self, priority: float):
         self._waiters.append_priority = priority
         return await super().acquire()
     
 if __name__ == "__main__":
 
-    sem, p_sem = None, None
+    
+    p_sem = PrioritySemaphore(2)
+    sem = asyncio.Semaphore(2)
 
     async def normal_semaphored_print(val):
         async with sem:
@@ -44,25 +48,34 @@ if __name__ == "__main__":
             print(val, end=", ")
 
     async def prioritized_print(val):
-        async with p_sem.priority(val):
+        async with p_sem.priority(-val):
             await asyncio.sleep(0.0)
-            print(val, end=", ")
+            print(-val, end=", ")
 
     async def prioritized_print_2(val):
-        await p_sem.priority_acquire(val)
+        await p_sem.priority_acquire(-val)
         await asyncio.sleep(0.0)
-        print(val, end=", ")
+        print(-val, end=", ")
         p_sem.release()
 
     async def main():
-        global sem, p_sem
-        p_sem = PrioritySemaphore(4)
-        sem = asyncio.Semaphore(4)
-        await asyncio.gather(*map(normal_semaphored_print, range(20, 0, -1)))
-        print('\n')
-        await asyncio.gather(*map(prioritized_print, range(20, 0, -1)))
-        print('\n')
-        await asyncio.gather(*map(prioritized_print_2, range(20, 0, -1)))
+
+        numlist = []
+        while len(numlist) < 20:
+            n = randint(1, 40)
+            if n in numlist:
+                pass
+            else:
+                numlist.append(n)
+            if len(numlist) > 0:
+                asyncio.create_task(prioritized_print_2(numlist))
+
+        print(numlist)
+        await asyncio.gather(*map(normal_semaphored_print, numlist))
+        print()
+        await asyncio.gather(*map(prioritized_print, numlist))
+        print()
+        await asyncio.gather(*map(prioritized_print_2, numlist))
         print()
 
     asyncio.run(main())

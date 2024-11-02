@@ -40,7 +40,7 @@ class status:
     DISCONNECTED = 0
     FAILED = ERROR
 
-    # TASK STATUS
+    # task status
     PENDING = 1
     RUNNING = 2
     COMPLETE = 3
@@ -409,7 +409,6 @@ class SinkData:
             _logs.error(f"Unhandled exception raised while creating a new SinkData object at {__name__}")
 
         return _self
-        
 
 class SensorAlerts:
     # connection
@@ -417,9 +416,9 @@ class SensorAlerts:
     DISCONNECTED = 0
 
     # temperature
-    HIGH_TEMP = 20
-    NORMAL_TEMP = 21
-    LOW_TEMP = 22
+    HIGH_TEMPERATURE = 30
+    NORMAL_TEMPERATURE = 31
+    LOW_TEMPERATURE = 32
 
     # humidity
     HIGH_HUMIDITY = 20
@@ -428,8 +427,8 @@ class SensorAlerts:
 
     # soil moisture
     HIGH_SOIL_MOISTURE = 40
-    NORMAL_SOIL_MOISTURE = 40
-    LOW_SOIL_MOISTURE = 41
+    NORMAL_SOIL_MOISTURE = 41
+    LOW_SOIL_MOISTURE = 42
 
     # maps the payload from the 'smmic/sensor/alert' topic
     # assuming that the shape of the payload (as a string) is:
@@ -461,7 +460,7 @@ class SensorAlerts:
 def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
     msg: dict | None = None
     try:
-        msg = queue.get(timeout=0.5)
+        msg = queue.get(timeout=0.1)
     except Exception as e:
         if not queue.empty():
             _logs.error(f"Unhandled exception raised while getting items from queue ({name}): {str(e)}")
@@ -472,7 +471,7 @@ def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any) -> Tuple[int,
     buffer = None
     result = status.FAILED
     try:
-        queue.put(obj=data, timeout=0.5)
+        queue.put_nowait(obj=data)
         result = status.SUCCESS
     except Exception as e:
         buffer = data

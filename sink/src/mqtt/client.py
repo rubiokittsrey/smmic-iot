@@ -206,7 +206,7 @@ async def shutdown_client() -> bool:
     if not _CALLBACK_CLIENT.is_connected():
         _CALLBACK_CLIENT = None
         return True
-    
+
     return False
 
 # necessary handler class in order to include the usage of the Queue object in the message callback of the client
@@ -214,28 +214,28 @@ class Handler:
     def __init__(self, task_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
         self._task_queue: multiprocessing.Queue = task_queue
         self._sys_queue: multiprocessing.Queue = sys_queue
-    
+
     # the message callback function
     # routes the messages received by the client on relevant topics to the queue
     # sets the priority for each task
     # NOTE to self: can be scaled to do more tasks just in case
     def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
-        
+
         # -->
         # {priority: the priority of the message
         # topic: topic message was published ,
         # payload: the message contents,
         # timestamp: the message timestamp #NOTE: either when it was sent or received (idk yet)}
         # --->
-        _topic = message.topic
-        _timestamp = message.timestamp
-        _payload = str(message.payload.decode('utf-8'))
+        topic = message.topic
+        timestamp = message.timestamp
+        payload = str(message.payload.decode('utf-8'))
         try:
-            if _topic.startswith("$SYS"):
-                self._sys_queue.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+            if topic.startswith("$SYS"):
+                self._sys_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
             else:
-                self._task_queue.put({'topic': _topic, 'payload': _payload, 'timestamp': _timestamp})
+                self._task_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
         except Exception as e:
-            _log.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {_topic}, 'payload': {_payload}) - ERROR: {str(e)}")
+            _log.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}")
 
         return

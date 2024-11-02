@@ -13,7 +13,7 @@ from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from aiohttpclient import api_check
+from httpclient import api_check
 from utils import log_config, is_num, get_from_queue, status, put_to_queue
 from settings import APPConfigurations, Topics
 
@@ -117,7 +117,7 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
         mem_split : List[Any] = s_output[1].split(' ')
         swap_split: List[Any] = s_output[2].split(' ')
         cache = [(mem_split, mem_f), (swap_split, swap_f)]
-        
+
         # remove any empty occurence within each split
         # and pop the first items 'Mem:' or 'Swap:'
         for split, f in cache:

@@ -23,7 +23,7 @@ from utils import (log_config,
                    SensorAlerts,
                    status)
 from settings import APPConfigurations, Topics
-from src.data import sysmonitor, aiosqlitedb, aiohttpclient
+from src.data import sysmonitor, locstorage, httpclient
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -60,12 +60,6 @@ async def _delegator(semaphore: asyncio.Semaphore,
                      hardware_q: multiprocessing.Queue,
                      api_stat: int,
                      ) -> Any:
-    
-    # if the task is an api_disconnect trigger, forward to the correct queue
-    if list(data.keys()).count('api_disconnect'):
-        if data['api_disconnect']:
-            _to_queue(sysmonitor_q, data)
-        return
 
     # topics that need to be handled by the aiohttp client (http requests, api calls)
     aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT, Topics.SINK_ALERT]
@@ -79,10 +73,11 @@ async def _delegator(semaphore: asyncio.Semaphore,
     async with semaphore:
         dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
+        # failed tasks should have separate handling logic
         if data['status'] == int(status.FAILED):
 
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
-            if data['origin'] == aiohttpclient.alias:
+            if data['origin'] == httpclient.alias:
                 dest.append((aiosqlite_q, {**data, 'to_unsynced': True}))
 
         else:
@@ -94,6 +89,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
                 dest.append((aiosqlite_q, {**data, 'to_unsynced': False}))
 
             if data['topic'] in aiohttp_queue_topics:
+                # route tasks to aiosqlite unsynced table if api_status is disconnected
                 if api_stat == status.DISCONNECTED:
                     dest.append((aiosqlite_q, {**data, 'to_unsynced': True, 'origin': alias}))
                 else:
@@ -105,17 +101,39 @@ async def _delegator(semaphore: asyncio.Semaphore,
             if data['topic'] == Topics.SENSOR_ALERT:
                 alert = SensorAlerts.map_sensor_alert(data['payload'])
 
-                alert_c = alert['alert_code']
-                if alert_c == SensorAlerts.CONNECTED:
-                    pass
-                elif alert_c == SensorAlerts.DISCONNECTED:
-                    dest.append((hardware_q, {**alert, 'disconnected': True}))
-        
+                if alert:
+                    alert_c = alert['alert_code']
+                    if alert_c == SensorAlerts.CONNECTED:
+                        pass
+                    elif alert_c == SensorAlerts.DISCONNECTED:
+                        dest.append((hardware_q, {**alert, 'disconnected': True}))
+
+        res = []
         for queue, f_task in dest:
             #_log.debug(f"Data put to queue: {queue}")
-            put_to_queue(queue, __name__, f_task)
+            res.append(put_to_queue(queue, __name__, f_task))
 
-    return 
+        if any(r[0] for r in res) == status.FAILED:
+            _log.warning('')
+
+    return
+
+# passes the triggers into the concerned subprocess(es)
+def _trigger_handler(trigger: Dict,
+                     sysmonitor_q: multiprocessing.Queue,
+                     aiosqlite_q: multiprocessing.Queue,
+                     aiohttpclient_q: multiprocessing.Queue,
+                     hardware_q: multiprocessing.Queue,
+                     ) -> Any:
+    dest: List[Tuple[multiprocessing.Queue, Any]] = []
+
+    if trigger['context'] == 'api-connection-status':
+        dest.append((sysmonitor_q, trigger))
+
+    for q, t in dest:
+        put_to_queue(q, __name__, t)
+
+    return
 
 # internal helper function that handles putting messages to queue
 # primarily used by the delegator
@@ -139,14 +157,11 @@ async def start(
         aiohttpclient_q: multiprocessing.Queue,
         hardware_q: multiprocessing.Queue,
         sysmonitor_q: multiprocessing.Queue,
+        triggers_q: multiprocessing.Queue,
         api_stat: int
         ) -> None:
-    # testing out this semaphore count
-    # if the system experiences delay or decrease in performance, try to lessen this amount
-    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
-    # TODO: look into this priority queue
-    # priority_queue = asyncio.PriorityQueue()
 
+    semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.get_running_loop()
@@ -154,7 +169,7 @@ async def start(
         _log.error(f"{alias} failed to get running event loop at PID {os.getpid()}: {str(e)}")
         return
 
-    aiosqlite_q = multiprocessing.Queue()
+    locstorage_q = multiprocessing.Queue()
 
     # api status flag
     api_status = status.DISCONNECTED
@@ -165,7 +180,7 @@ async def start(
         'sysmonitor_q': sysmonitor_q,
         'aiohttpclient_q':aiohttpclient_q,
         'hardware_q': hardware_q,
-        'aiosqlite_q': aiosqlite_q
+        'locstorage_q': locstorage_q
     }
 
     tasks: Set[asyncio.Task] = set()
@@ -173,49 +188,68 @@ async def start(
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            aiosqlitedb_t = asyncio.create_task(aiosqlitedb.start(aiosqlite_q))
+            aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
                     data = await loop.run_in_executor(pool, get_from_queue, taskmanager_q, __name__)
+                    # triggers
+                    trigger = await loop.run_in_executor(pool, get_from_queue, triggers_q, __name__)
+                    task = None
 
+                    #
+                    # triggers are handled by the trigger handler, without semaphores
+                    # trigger shape:
+                    #   {
+                    #       'origin': 'httpclient', (the origin module)
+                    #       'context': 'api-connection-status'
+                    #       'data': (data regarding the trigger)
+                    #               {
+                    #                'timestamp': datetime,
+                    #                'status': int
+                    #                'errs': none | list[str]
+                    #               }
+                    #   }
+                    #   'context' == (the context behind hte trigger, or the cause / source)
+                    #   'data' == (dictionary containing the data of the trigger, including the timestamp and the error(s) if any)
+                    #
+                    if trigger:
+                        _log.info(f"{alias} received trigger: {trigger['context']}")
+
+                        if trigger['context'] == 'api-connection-status':
+                            api_status = trigger['data']['status']
+
+                        task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=trigger, api_stat=api_status))
+                        tasks.add(task)
+                        task.add_done_callback(tasks.discard)
+
+                    #
+                    # data shape:
+                    # {     
+                    #       'topic': str,
+                    #       'timestamp': datetime,
+                    #       'payload': str,
+                    #       'status': int (tasks with failed statuses are tasks that are fed back into the tmanager_q by subprocesses),
+                    #       'task_id': str (hash id of the task's topic and payload),
+                    # }
+                    #
                     if data:
-                        t_keys = list(data.keys())
+                        d_keys = list(data.keys())
+                        if 'status' not in d_keys:
+                            data.update({
+                                    'status': status.PENDING,
+                                    'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
+                                })
+                        _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())
 
-                        # if the task is an api disconnect trigger
-                        if 'api_disconnect' in t_keys:
-                            # assign proper status value to flag
-                            if data['api_disconnect']:
-                                api_status = status.DISCONNECTED
-                                task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)).add_done_callback(tasks.discard)
-                                tasks.add(task)
-                            else:
-                                if api_status != status.CONNECTED:
-                                    api_status = status.CONNECTED
-                                else:
-                                    _log.warning(f"API disconnect trigger ({data['api_disconnect']}) received but api_status == status.CONNECTED")
-                        
-                        else:
-                            log_msg = ''
-                            if 'status' not in t_keys:
-                                data.update({
-                                        'status': status.PENDING,
-                                        'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
-                                    })
-                                log_msg = f"{alias} received item from queue: {data['task_id']}".capitalize()
-                            elif data['status'] == status.FAILED:
-                                log_msg = f"{alias} received failed item from queue: {data['task_id']}".capitalize()
-                            else:
-                                log_msg = f"{alias} received item from queue: {data['task_id']}".capitalize()                        
-                            _log.debug(log_msg)
+                        task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)) # pass api status flag to delegator
+                        tasks.add(task)
+                        task.add_done_callback(tasks.discard)
 
-                            task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)).add_done_callback(tasks.discard) # pass api status flag to delegator
-                            tasks.add(task)
-
+                    # dont modify
                     await asyncio.sleep(0.05)
 
         except (KeyboardInterrupt, asyncio.CancelledError):
-
             for t in tasks:
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)

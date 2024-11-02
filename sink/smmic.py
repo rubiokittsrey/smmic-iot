@@ -21,7 +21,7 @@ from typing import Tuple, List, Callable
 import taskmanager
 from src.hardware import hardware, network
 from src.mqtt import service, client
-from src.data import aiohttpclient, sysmonitor, aiosqlitedb
+from src.data import sysmonitor, locstorage, httpclient
 
 # internal helpers, configs
 from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
@@ -94,6 +94,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     aio_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
+    triggers_queue = multiprocessing.Queue()
 
     task_manager_kwargs = {
         'pretty_alias': taskmanager.alias,
@@ -102,12 +103,13 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'aiohttpclient_q': aio_queue,
         'hardware_q': hardware_queue,
         'sysmonitor_q': sys_queue,
+        'triggers_q': triggers_queue,
         'api_stat': api_status
     }
 
     aiohttp_client_kwargs = {
-        'pretty_alias': aiohttpclient.alias,
-        'sub_proc': aiohttpclient.start,
+        'pretty_alias': httpclient.alias,
+        'sub_proc': httpclient.start,
         'aiohttpclient_q': aio_queue,
         'taskmanager_q': task_queue,
     }
@@ -147,7 +149,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # shutdown and cleanup
         try:
             await asyncio.gather(*coroutines)
-        except (asyncio.CancelledError, KeyboardInterrupt):
+        except (asyncio.CancelledError, KeyboardInterrupt) as e:
             _log.warning(f"Main process received {type(e).__name__}, shutting down operations")
 
             for proc in processes:
@@ -250,11 +252,11 @@ def sys_check() -> Tuple[int, int | None]:
 
         if loop:
             # local storage as part of core status
-            storage_status = loop.run_until_complete(aiosqlitedb.init())
+            storage_status = loop.run_until_complete(locstorage.init())
             if storage_status != status.SUCCESS:
                 core_status = status.FAILED
             else:
-                api_status = loop.run_until_complete(aiohttpclient.api_check())
+                api_status = loop.run_until_complete(httpclient.api_check())
 
     else:
         _log.critical('Network check returned with critical errors, cannot proceed with operation')

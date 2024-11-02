@@ -7,7 +7,7 @@ this is the aiohttp session module of the entire system
 # TODO: documentation
 """
 
-alias = "aiohttp-client"
+alias = "http-client"
 
 # third-party
 import logging

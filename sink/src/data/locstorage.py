@@ -17,7 +17,6 @@ from datetime import datetime
 # internal helpers, configurations
 from settings import APPConfigurations, Topics, Broker
 from utils import log_config, get_from_queue, SinkData, SensorData, status
-import aiohttpclient
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -270,22 +269,17 @@ class Schema:
 # pushes unsynced data from sqlite to the api
 # puts the unsynced data to the taskamanger queue
 # this should be run as a coroutine
-async def push_unsynced(read_semaphore: asyncio.Semaphore,
-                        write_lock: asyncio.Lock,
-                        taskmanager_q: multiprocessing.Queue
-                        ) -> Any:
-
+async def push_unsynced(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, taskmanager_q: multiprocessing.Queue) -> Any:
     sql = "SELECT * FROM UNSYNCEDDATA"
 
     async with read_semaphore:
-
         async with aiosqlite.connect(_DATABASE) as connection:
             data : Any = None
             try:
                 cursor = await connection.execute(sql)
                 data = await cursor.fetchall()
             except aiosqlite.OperationalError as e:
-                _log.error(f"Unhandled {type(e).__name__} raised at {__name__}: {str(e.__cause__)}")
+                _log.error(f"{type(e).__name__} raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
 
             return data
 
@@ -323,7 +317,7 @@ async def _executor(write_lock: asyncio.Lock, connection: aiosqlite.Connection, 
                 await connection.commit()
                 break
             except aiosqlite.OperationalError as e:
-                err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e.__cause__)}")
+                err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
                 await asyncio.sleep(1)
             except Exception as e:
                 err.append(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e)}")
@@ -377,7 +371,7 @@ async def init() -> int:
     return init_stat
 
 #
-async def start(queue: multiprocessing.Queue) -> None:
+async def start(storage_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
@@ -385,6 +379,7 @@ async def start(queue: multiprocessing.Queue) -> None:
         return
 
     write_lock = asyncio.Lock()
+    read_semaphore = asyncio.Semaphore(4)
     tasks: set[asyncio.Task] = set()
 
     try:
@@ -404,11 +399,17 @@ async def start(queue: multiprocessing.Queue) -> None:
                         flag = not flag
 
                     try:
-                        data = await loop.run_in_executor(pool, get_from_queue, queue, __name__)
+                        data = await loop.run_in_executor(pool, get_from_queue, storage_q, __name__)
+
+                        # if data and list(data.keys()).count('asfasd'):
+                        #     sync_t = asyncio.create_task(push_unsynced(read_semaphore, write_lock, taskmanager_q))
+                        #     tasks.add(task)
+                        #     sync_t.add_done_callback(tasks.discard)
 
                         if data:
-                            task = asyncio.create_task(_executor(write_lock, db, data)).add_done_callback(tasks.discard)
+                            task = asyncio.create_task(_executor(write_lock, db, data))
                             tasks.add(task)
+                            task.add_done_callback(tasks.discard)
 
                     except Exception as e:
                         _log.error(f"Unhandled exception at {__name__} loop: {str(e)}")

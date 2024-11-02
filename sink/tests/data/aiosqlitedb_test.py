@@ -13,7 +13,7 @@ except Exception as e:
     os._exit(0)
 
 # internal
-from data import aiosqlitedb
+from data import locstorage
 from utils import SinkData, SensorData
 
 if __name__ == "__main__":
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         'device_id': 'test'
     }
     #data = SinkData('raw_p', datetime.now(), 25, 25, 100, 1000, 1000, 250, 250, 0, 'test')
-    x = aiosqlitedb.Schema.SinkData.compose_insert(data)
+    x = locstorage.Schema.SinkData.compose_insert(data)
     print(x)
 
     data = {
@@ -45,5 +45,5 @@ if __name__ == "__main__":
         'battery_level':randint(60, 94)
     }
     #data = SensorData('soil_moisture', 'fd7b1df2-3822-425c-b4c3-e9859251728d', str(datetime.now()), SensorData.soil_moisture(randint(60, 94), randint(60, 94), randint(20, 25), randint(50, 100)), 'yurt')
-    x = aiosqlitedb.Schema.SensorData.compose_insert(data)
+    x = locstorage.Schema.SensorData.compose_insert(data)
     print(x)
