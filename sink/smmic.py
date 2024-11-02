@@ -80,7 +80,7 @@ def run_sub_p(*args, **kwargs):
         raise
 
     except Exception as e:
-        _log.error(f"Unhandled exception while attempting loop.run_forver() at PID {str(e)}")
+        _log.error(f"Unhandled exception while attempting loop.run_forver(): {str(e)}")
     finally:
         loop.close()
 
@@ -91,7 +91,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
 
     # multiprocessing.Queue to communicate between task_manager and callback_client processes
     task_queue = multiprocessing.Queue()
-    aio_queue = multiprocessing.Queue()
+    httpclient_queue = multiprocessing.Queue()
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
     triggers_queue = multiprocessing.Queue()
@@ -100,18 +100,19 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'pretty_alias': taskmanager.alias,
         'sub_proc': taskmanager.start,
         'taskmanager_q': task_queue,
-        'aiohttpclient_q': aio_queue,
+        'httpclient_q': httpclient_queue,
         'hardware_q': hardware_queue,
         'sysmonitor_q': sys_queue,
         'triggers_q': triggers_queue,
         'api_stat': api_status
     }
 
-    aiohttp_client_kwargs = {
+    httpclient_kwargs = {
         'pretty_alias': httpclient.alias,
         'sub_proc': httpclient.start,
-        'aiohttpclient_q': aio_queue,
+        'httpclient_q': httpclient_queue,
         'taskmanager_q': task_queue,
+        'triggers_q': triggers_queue
     }
 
     hardware_kwargs = {
@@ -121,7 +122,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'taskmanager_q': task_queue
     }
 
-    kwargs_list = [task_manager_kwargs, aiohttp_client_kwargs, hardware_kwargs]
+    kwargs_list = [task_manager_kwargs, httpclient_kwargs, hardware_kwargs]
 
     try:
         # first, spawn and run the task manager process
@@ -144,7 +145,13 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
         coroutines.append(asyncio.create_task(client.start_client(handler.msg_callback)))
         # start the system monitor queue
-        coroutines.append(asyncio.create_task(sysmonitor.start(sys_queue=sys_queue, taskmanager_q=task_queue, api_init_stat=api_status)))
+        sysmonitor_args = {
+            'sys_queue': sys_queue,
+            'taskmanager_q': task_queue,
+            'triggers_q': triggers_queue,
+            'api_init_stat': api_status
+        }
+        coroutines.append(asyncio.create_task(sysmonitor.start(**sysmonitor_args)))
 
         # shutdown and cleanup
         try:
@@ -165,18 +172,18 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
 
         # keep main thread alive
         while True:
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.1)
 
     except Exception as e:
         _log.error(f"Parent process called {type(e).__name__} exception: {str(e.__cause__)}")
         raise SystemExit()
 
 # create a new event loop and then run the main process within that loop
-def run(core_status: int, api_status: int | None):
+def run(core_status: int, api_status: int):
     if api_status == status.DISCONNECTED:
         _log.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
     elif api_status == status.FAILED:
-        _log.warning("API Health check returned with failure, proceeding with API fail protocols")
+        _log.warning("Connection with API established but health check returned with failure")
 
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -185,9 +192,8 @@ def run(core_status: int, api_status: int | None):
     except Exception as e:
         ExceptionsHandler.event_loop.unhandled(__name__, os.getpid(), str(e))
         os._exit(0)
-
     # if loop event loop is present, run main()
-    if loop and api_status:
+    if loop:
         main_t = loop.create_task(main(loop, api_status))
         try:
             loop.run_forever()
@@ -209,13 +215,13 @@ def run(core_status: int, api_status: int | None):
 # runs the system checks from the network and service modules
 # returns a tuple of status literals, core status and api connection status
 # TODO: add an environment variables check in settings.py and call it in this method
-def sys_check() -> Tuple[int, int | None]:
+def sys_check() -> Tuple[int, int]:
     # the core functions status, excluding the api connection status
     core_status: int
     # the api status
     # NOTE: that if the api status is unsuccessful the system should still operate under limited functionalities
     # i.e. store data locally (and only until uploaded to api)
-    api_status: int | None = None
+    api_status: int = 0
     # the local storage status
 
     _log.info(f"Performing core system checks")
@@ -256,8 +262,7 @@ def sys_check() -> Tuple[int, int | None]:
             if storage_status != status.SUCCESS:
                 core_status = status.FAILED
             else:
-                api_status = loop.run_until_complete(httpclient.api_check())
-
+                api_status, _b, _e = loop.run_until_complete(httpclient.api_check())
     else:
         _log.critical('Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED

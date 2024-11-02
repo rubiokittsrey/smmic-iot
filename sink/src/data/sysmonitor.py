@@ -1,6 +1,7 @@
 # the system monitoring module
 # description -->>
 # TODO: documentation
+alias = __name__
 
 # third-party
 import os
@@ -17,7 +18,7 @@ from httpclient import api_check
 from utils import log_config, is_num, get_from_queue, status, put_to_queue
 from settings import APPConfigurations, Topics
 
-_log = log_config(logging.getLogger(__name__))
+_log = log_config(logging.getLogger(alias))
 
 _CONNECTED_CLIENTS : int = 0
 _CLIENTS_TOTAL : int = 0
@@ -145,23 +146,32 @@ def mem_check() -> Tuple[List[int|float], List[int|float]]:
 # should await on startup if init system check returned with api disconnect
 # if api disconnect is triggered by the system in the middle of operation (not right after startup) no_wait_start should be True
 # to allow immediate checking. wait should only apply after *that* first no wait run
-async def _periodic_api_chk(no_wait_start = False) -> int:
+async def _periodic_api_chk(triggers_q: multiprocessing.Queue, no_wait_start = False) -> int:
+    loop = None
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _log.error(f"{alias} failed to get running event loop ({type(e).__name__}): {str(e.__cause__) if e.__cause__ else str(e)}")
+
+    if not loop:
+        return status.FAILED
+
     await_time = APPConfigurations.API_DISCON_WAIT # await time in seconds, 30 minutes
-    mod_name = list(__name__.split('.'))[len(__name__.split('.')) - 1]
-    chk_res: int = status.UNVERIFIED
+    mod_name = list(alias.split('.'))[len(alias.split('.')) - 1]
+    chk_stat: int = status.UNVERIFIED
 
     _log.info(f"{mod_name} running periodic API check{' (no wait start)' if no_wait_start else ''}".capitalize())
     attempt_count = 0
     try:
-        while not chk_res == status.CONNECTED:
+        while not chk_stat == status.SUCCESS:
             # check no wait start condition
             # and always await after first attempt
             if not no_wait_start or attempt_count > 0:
                 await asyncio.sleep(await_time) # every 30 minutes
 
-            chk_res = await api_check()
+            chk_stat, chk_body, chk_errs = await api_check()
 
-            if chk_res == status.SUCCESS:
+            if chk_stat == status.SUCCESS:
                 break
             else:
                 attempt_count += 1
@@ -170,21 +180,33 @@ async def _periodic_api_chk(no_wait_start = False) -> int:
     except (KeyboardInterrupt, asyncio.CancelledError):
         return status.UNVERIFIED
 
+    trigger = {
+        'origin': alias,
+        'context': 'api-connection-status',
+        'data': {
+            'timestamp': datetime.now(),
+            'status': status.CONNECTED if chk_stat == status.SUCCESS else status.DISCONNECTED,
+            'errs': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in chk_errs],
+        }
+    }
+    with ThreadPoolExecutor() as pool:
+        await loop.run_in_executor(pool, put_to_queue, triggers_q, alias, trigger)
+
     _log.info(f"{mod_name} periodic API check returned with status.CONNECTED".capitalize())
     return status.CONNECTED
 
 # start this module / coroutine
-async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, api_init_stat: int) -> None:
+async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, triggers_q: multiprocessing.Queue, api_init_stat: int) -> None:
     # verify existence of event loop
     loop = None
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Failed to get running event loop @ PID {os.getpid()} sysmonitor module: {str(e)}")
+        _log.error(f"{alias} failed to get running event loop: {str(e.__cause__) if e.__cause__ else str(e)}")
         return
 
     if loop:
-        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
+        _log.info(f"Coroutine {alias.split('.')[len(alias.split('.')) - 1]} active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
             # TODO: handle task cancellation of this
@@ -193,27 +215,24 @@ async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing
                 asyncio.create_task(_put_to_queue(taskmanager_q))
                 global _PERIODIC_CHK_FLAG
 
-                # NOTE: this code (and the code inside the while loop)
-                # naively assumes that when the _periodic_api_chk method ends, the connection is established
-                # if an exception is called from that function or within the chain of functions that run this protocol
                 if api_init_stat in [status.DISCONNECTED, status.FAILED]:
                     _PERIODIC_CHK_FLAG = True
-                    init_chk = asyncio.create_task(_periodic_api_chk())
+                    init_chk = asyncio.create_task(_periodic_api_chk(triggers_q=triggers_q))
                     init_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
-                    init_chk.add_done_callback(lambda f: loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, {'api_disconnect': False}))
-
+ 
                 #await loop.run_in_executor(pool, __put_to_queue__, msg_queue)
                 while True:
-                    item = await loop.run_in_executor(pool, get_from_queue, sys_queue, __name__)
+                    item = await loop.run_in_executor(pool, get_from_queue, sys_queue, alias)
 
                     # if the item is an api_disconnect flag
                     if item:
-                        if list(item.keys()).count('api_disconnect'):
-                            if not _PERIODIC_CHK_FLAG:
-                                _PERIODIC_CHK_FLAG = True
-                                while_run_chk = asyncio.create_task(_periodic_api_chk(no_wait_start=True))
-                                while_run_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
-                                while_run_chk.add_done_callback(lambda f: loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, {'api_disconnect': False}))
+                        # triggers have separate handling logic
+                        if list(item.keys()).count('trigger'):
+                            if item['context'] == 'api-connection-status':
+                                if item['data']['status'] == status.DISCONNECTED and not _PERIODIC_CHK_FLAG:
+                                    _PERIODIC_CHK_FLAG = True
+                                    while_run_chk = asyncio.create_task(_periodic_api_chk(triggers_q=triggers_q, no_wait_start=True))
+                                    while_run_chk.add_done_callback(lambda f: globals().update({'_PERIODIC_CHK_FLAG': False}))
                         else:
                             #__log__.debug(f"Sysmonitor @ PID {os.getpid()} received message from queue (topic: {msg['topic']})")
                             asyncio.create_task(_update_values(topic=item['topic'], value=int(item['payload'])))
@@ -224,4 +243,4 @@ async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing
             return
 
         except Exception as e:
-            _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e.__cause__)}")
+            _log.error(f"Unhandled exception {type(e).__name__} raised at {alias}: {str(e.__cause__)}")

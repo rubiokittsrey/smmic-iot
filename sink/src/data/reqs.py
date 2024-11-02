@@ -21,29 +21,43 @@ _log = log_config(logging.getLogger(__name__))
 # internal request decorator that provides request statistics and handles exception
 # TODO: add other stats, store failed requests, implement failed request protocol
 # returns the response status and the response body
-def _req(func: Callable) -> Any:
-    async def _wrapper(*args, **kwargs) -> Tuple[int, dict | None]:
+def _req_decorator(func: Callable) -> Any:
+    async def _wrapper(*args, **kwargs) -> Tuple[int, Dict[str, Any] | None, List[Tuple[str, str, str]]]:
         start = time.time()
         attempt = 0
 
         retries: int = kwargs.get('retries', APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES)
 
-        stat: int = 0
-        result: Any | None = None
+        status: int = 0
+        body: Any | None = None
         err_logs: List[str] = []
-        errs : List[Any] = []
+        errs : List[Tuple[str, str, str]] = [] # Tuple[err_name, err_msg, err_cause (if provided)]
 
         while attempt < retries:
+
             try:
-                stat, result = await func(*args, **kwargs)
+                status, body = await func(*args, **kwargs)
                 end = time.time()
                 break
                 #return response
+
             except (aiohttp.ClientConnectorError, aiohttp.ClientResponseError, aiohttp.ClientError, aiohttp.ClientConnectionError) as e:
+                err_msg = e.__cause__
+
+                # connection error handling
                 if type(e) in [aiohttp.ClientConnectorError, aiohttp.ClientConnectionError]:
                     await asyncio.sleep(3) # sleep for 3 secs (non-blocking) to allow connection to establish
-                err_logs.append(f"Exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(e.__cause__)}")
-                errs.append(e)
+                    status = 0
+
+                # response error handling
+                elif type(e) == aiohttp.ClientResponseError:
+                    status = e.status
+                    err_msg = e.message
+
+                # logging logic
+                err_logs.append(f"Exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(err_msg) if err_msg else str(e)}")
+                errs.append((type(e).__name__, str(e), f'{str(err_msg) if err_msg else ''}'))
+
             except Exception as e:
                 err_logs.append(f"Unhandled exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(e.__cause__)}")
             # except aiohttp.ClientTimeout as e:
@@ -66,28 +80,18 @@ def _req(func: Callable) -> Any:
                     logged.append(e)
 
         # if err length == retries, request failed
+        # put err names into the list and assign to result
         if len(err_logs) == retries:
             _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
-            stat = status.FAILED
-
-            # if the request fails, log the name of the errors into err_names and then assign to 'result'
-            err_names : List[str] = []
-            for e in errs:
-                if type(e).__name__ in err_names:
-                    pass
-                else:
-                    err_names.append(type(e).__name__)
-            result = err_names
-
         else:
             _log.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
 
-        return stat, result
+        return status, body, errs
     
     return _wrapper
 
 # TODO: create a unit test at api_test.py
-@_req
+@_req_decorator
 async def get_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -103,7 +107,7 @@ async def get_req(
         return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
-@_req
+@_req_decorator
 async def post_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -119,7 +123,7 @@ async def post_req(
         return res_stat, res_body
 
 # TODO: create a unit test at api_test.py
-@_req
+@_req_decorator
 async def put_req(
     session: aiohttp.ClientSession,
     url: str,
@@ -133,7 +137,7 @@ async def put_req(
         return response
 
 # TODO: create a unit test at api_test.py
-@_req
+@_req_decorator
 async def patch_req(
         session: aiohttp.ClientSession,
         url: str,
@@ -147,7 +151,7 @@ async def patch_req(
         return response
 
 # TODO: create a unit test at api_test.py
-@_req
+@_req_decorator
 async def delete_req(
         session: aiohttp.ClientSession,
         url: str,

@@ -55,8 +55,8 @@ async def _dev_test_task(data: dict) -> None:
 async def _delegator(semaphore: asyncio.Semaphore,
                      data: Dict,
                      sysmonitor_q: multiprocessing.Queue,
-                     aiosqlite_q: multiprocessing.Queue,
-                     aiohttpclient_q: multiprocessing.Queue,
+                     locstorage_q: multiprocessing.Queue,
+                     httpclient_q: multiprocessing.Queue,
                      hardware_q: multiprocessing.Queue,
                      api_stat: int,
                      ) -> Any:
@@ -78,7 +78,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
 
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
             if data['origin'] == httpclient.alias:
-                dest.append((aiosqlite_q, {**data, 'to_unsynced': True}))
+                dest.append((locstorage_q, {**data, 'to_unsynced': True}))
 
         else:
 
@@ -86,14 +86,14 @@ async def _delegator(semaphore: asyncio.Semaphore,
                 await _dev_test_task(data)
 
             if data['topic'] in aiosqlite_queue_topics:
-                dest.append((aiosqlite_q, {**data, 'to_unsynced': False}))
+                dest.append((locstorage_q, {**data, 'to_unsynced': False}))
 
             if data['topic'] in aiohttp_queue_topics:
                 # route tasks to aiosqlite unsynced table if api_status is disconnected
                 if api_stat == status.DISCONNECTED:
-                    dest.append((aiosqlite_q, {**data, 'to_unsynced': True, 'origin': alias}))
+                    dest.append((locstorage_q, {**data, 'to_unsynced': True, 'origin': alias}))
                 else:
-                    dest.append((aiohttpclient_q, data))
+                    dest.append((httpclient_q, data))
 
             if data['topic'] in hardware_queue_topics:
                 dest.append((hardware_q, data))
@@ -109,9 +109,9 @@ async def _delegator(semaphore: asyncio.Semaphore,
                         dest.append((hardware_q, {**alert, 'disconnected': True}))
 
         res = []
-        for queue, f_task in dest:
+        for _queue, _data in dest:
             #_log.debug(f"Data put to queue: {queue}")
-            res.append(put_to_queue(queue, __name__, f_task))
+            res.append(put_to_queue(_queue, __name__, _data))
 
         if any(r[0] for r in res) == status.FAILED:
             _log.warning('')
@@ -121,17 +121,24 @@ async def _delegator(semaphore: asyncio.Semaphore,
 # passes the triggers into the concerned subprocess(es)
 def _trigger_handler(trigger: Dict,
                      sysmonitor_q: multiprocessing.Queue,
-                     aiosqlite_q: multiprocessing.Queue,
-                     aiohttpclient_q: multiprocessing.Queue,
+                     locstorage_q: multiprocessing.Queue,
+                     httpclient_q: multiprocessing.Queue,
                      hardware_q: multiprocessing.Queue,
                      ) -> Any:
     dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
     if trigger['context'] == 'api-connection-status':
-        dest.append((sysmonitor_q, trigger))
 
-    for q, t in dest:
-        put_to_queue(q, __name__, t)
+        if trigger['data']['status'] == status.CONNECTED:
+            dest.append((locstorage_q, {**trigger, 'trigger': True}))
+        else:
+            dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
+
+        # if trigger['origin'] != httpclient.alias:
+        #     dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
+
+    for _queue, _trigger in dest:
+        put_to_queue(queue=_queue, name=__name__, data=_trigger, nowait=True)
 
     return
 
@@ -154,7 +161,7 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 #
 async def start(
         taskmanager_q: multiprocessing.Queue,
-        aiohttpclient_q: multiprocessing.Queue,
+        httpclient_q: multiprocessing.Queue,
         hardware_q: multiprocessing.Queue,
         sysmonitor_q: multiprocessing.Queue,
         triggers_q: multiprocessing.Queue,
@@ -178,7 +185,7 @@ async def start(
 
     queues_kwargs = {
         'sysmonitor_q': sysmonitor_q,
-        'aiohttpclient_q':aiohttpclient_q,
+        'httpclient_q':httpclient_q,
         'hardware_q': hardware_q,
         'locstorage_q': locstorage_q
     }
@@ -198,8 +205,8 @@ async def start(
                     task = None
 
                     #
-                    # triggers are handled by the trigger handler, without semaphores
-                    # trigger shape:
+                    # NOTE: triggers are handled by the trigger handler function, without semaphores
+                    # EXAMPLE trigger shape:
                     #   {
                     #       'origin': 'httpclient', (the origin module)
                     #       'context': 'api-connection-status'
@@ -207,19 +214,26 @@ async def start(
                     #               {
                     #                'timestamp': datetime,
                     #                'status': int
-                    #                'errs': none | list[str]
+                    #                'errs': list[
+                    #                               {
+                    #                                   'err_name': name,
+                    #                                   'err_msg': msg,
+                    #                                   'err_cause': cause
+                    #                               },
+                    #                               ...
+                    #                            ]
                     #               }
                     #   }
                     #   'context' == (the context behind hte trigger, or the cause / source)
                     #   'data' == (dictionary containing the data of the trigger, including the timestamp and the error(s) if any)
                     #
                     if trigger:
-                        _log.info(f"{alias} received trigger: {trigger['context']}")
+                        _log.info(f"{alias} received trigger: {trigger['context']}".capitalize())
 
                         if trigger['context'] == 'api-connection-status':
                             api_status = trigger['data']['status']
 
-                        task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=trigger, api_stat=api_status))
+                        task = asyncio.create_task(_trigger_handler(**queues_kwargs, trigger=trigger))
                         tasks.add(task)
                         task.add_done_callback(tasks.discard)
 
@@ -231,6 +245,7 @@ async def start(
                     #       'payload': str,
                     #       'status': int (tasks with failed statuses are tasks that are fed back into the tmanager_q by subprocesses),
                     #       'task_id': str (hash id of the task's topic and payload),
+                    #       'cause': [{'errname': str, 'errmsg': str, 'errcause': str}] (if failed)
                     # }
                     #
                     if data:

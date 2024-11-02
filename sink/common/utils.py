@@ -27,23 +27,23 @@ _LOG_FORMATTER_VERBOSE = _logging.Formatter('%(asctime)s - %(levelname)s - %(mes
 
 class status:
     # checks
-    UNVERIFIED = 100
-    SUCCESS = 200
-    WARNING = 300
-    ERROR = 400
-    CRITICAL = 500
+    UNVERIFIED : int = 100
+    SUCCESS : int = 200
+    WARNING : int = 300
+    ERROR : int = 400
+    CRITICAL : int = 500
 
     # states
-    ACTIVE = 250
-    INACTIVE = 350
-    CONNECTED = 1
-    DISCONNECTED = 0
+    ACTIVE : int = 250
+    INACTIVE : int = 350
+    CONNECTED : int = 1
+    DISCONNECTED : int = 0
     FAILED = ERROR
 
     # task status
-    PENDING = 1
-    RUNNING = 2
-    COMPLETE = 3
+    PENDING : int = 1
+    RUNNING : int = 2
+    COMPLETE : int = 3
 
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
@@ -463,15 +463,18 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
         msg = queue.get(timeout=0.1)
     except Exception as e:
         if not queue.empty():
-            _logs.error(f"Unhandled exception raised while getting items from queue ({name}): {str(e)}")
+            _logs.error(f"Unhandled exception {type(e).__name__} raised while getting items from queue ({name}): {str(e.__cause__) if e.__cause__ else str(e)}")
 
     return msg
 
-def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any) -> Tuple[int, Any]:
+def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any, nowait = False) -> Tuple[int, Any]:
     buffer = None
     result = status.FAILED
     try:
-        queue.put_nowait(obj=data)
+        if nowait:
+            queue.put_nowait(obj=data)
+        else:
+            queue.put(obj=data)
         result = status.SUCCESS
     except Exception as e:
         buffer = data
