@@ -430,16 +430,31 @@ class SensorAlerts:
     NORMAL_SOIL_MOISTURE = 41
     LOW_SOIL_MOISTURE = 42
 
+    # NOTE: modify sensor alerts to accomodate this shape:
+    #{
+    #   'device_id':
+    #   'timestamp':
+    #   'alert_code':
+    #   'readings': {
+    #                   'soil_moisture':
+    #                   'humidity':
+    #                   'temperature':
+    #                   'battery_level':
+    #               }
+    #}
+    #
+
     # maps the payload from the 'smmic/sensor/alert' topic
     # assuming that the shape of the payload (as a string) is:
     # ---------
     # device_id;
     # timestamp;
-    # alert_code
+    # alert_code;
+    # key:value&key:value; ----> the data contained in the alert
     # ---------
     @staticmethod
     def map_sensor_alert(payload: str) -> Dict | None:
-        final: Dict | None
+        final : Dict | None = {}
 
         outer_split: List[str] = payload.split(';')
         final = {'device_id': outer_split[0], 'timestamp': outer_split[1]}
@@ -447,11 +462,24 @@ class SensorAlerts:
         num_check = is_num(outer_split[2])
 
         if not num_check:
+            _logs.warning(f"{__name__}.map_sensor_alert received alert payload with invalid alert_code: {outer_split[2]}")
             final = None
         else:
             final.update({
                 'alert_code': num_check(outer_split[2])
             })
+
+        if final and final['alert_code'] not in [SensorAlerts.DISCONNECTED, SensorAlerts.CONNECTED]:
+            try:
+                data_split = outer_split[3].split('&')
+                buffer = {}
+                for data in data_split:
+                    x = data.split(':')
+                    buffer.update({x[0]: x[1]})
+                final.update({'data': buffer})
+            except IndexError as e:
+                _logs.warning(f"{__name__}.map_sensor_alert raised {type(e).__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
+                final = None
 
         return final
 

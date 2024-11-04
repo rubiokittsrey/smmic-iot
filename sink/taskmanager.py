@@ -108,13 +108,9 @@ async def _delegator(semaphore: asyncio.Semaphore,
                     elif alert_c == SensorAlerts.DISCONNECTED:
                         dest.append((hardware_q, {**alert, 'disconnected': True}))
 
-        res = []
-        for _queue, _data in dest:
-            #_log.debug(f"Data put to queue: {queue}")
-            res.append(put_to_queue(_queue, __name__, _data))
-
+        res = [put_to_queue(_queue, __name__, _t_data) for _queue, _t_data in dest]
         if any(r[0] for r in res) == status.FAILED:
-            _log.warning('')
+            _log.warning('Failed to put one or tasks into queue(s)')
 
     return
 

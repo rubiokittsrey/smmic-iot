@@ -155,7 +155,7 @@ async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocess
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    task = await loop.run_in_executor(pool, get_from_queue, httpclient_q, __name__) # non-blocking message retrieval
+                    task = await loop.run_in_executor(pool, get_from_queue, httpclient_q, __name__) # non-blocking message
 
                     # if an item is retrieved
                     if task:

@@ -3,7 +3,6 @@
 # 1. responsible for spawning the task manager child process
 # 2. runs the client in an event loop
 # 3. routes messages to the msg_queue
-# 4. TODO: implement spawning of hardware process to manage hardware tasks in true parallelism
 
 # third-party
 import logging
@@ -246,8 +245,7 @@ def sys_check() -> Tuple[int, int]:
             core_status = status.FAILED
 
         # check api connection and health
-        # if the check fails, implement no api connection protocol
-        # TODO: create no connection to api system protocols
+        # if the check fails, proceed with no api connection protocol
         loop: asyncio.AbstractEventLoop | None = None
         try:
             loop = asyncio.new_event_loop()

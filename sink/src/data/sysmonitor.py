@@ -209,7 +209,6 @@ async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing
         _log.info(f"Coroutine {alias.split('.')[len(alias.split('.')) - 1]} active at PID {os.getpid()}")
         # use threadpool executor to run retrieval from queue in non-blocking way
         try:
-            # TODO: handle task cancellation of this
             with ThreadPoolExecutor() as pool:
                 #_coroutines = []
                 asyncio.create_task(_put_to_queue(taskmanager_q))
