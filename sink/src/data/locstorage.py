@@ -11,12 +11,19 @@ import multiprocessing
 import inspect
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Callable
 from datetime import datetime
 
 # internal helpers, configurations
 from settings import APPConfigurations, Topics, Broker
-from utils import log_config, get_from_queue, SinkData, SensorData, status
+from utils import (
+    log_config,
+    get_from_queue,
+    put_to_queue,
+    SinkData,
+    SensorData,
+    status
+    )
 
 _log = log_config(logging.getLogger(__name__))
 
@@ -266,29 +273,16 @@ class Schema:
             'payload'
         ]
 
-# pushes unsynced data from sqlite to the api
-# puts the unsynced data to the taskamanger queue
-# this should be run as a coroutine
-async def push_unsynced(read_semaphore: asyncio.Semaphore, write_lock: asyncio.Lock, taskmanager_q: multiprocessing.Queue) -> Any:
-    sql = "SELECT * FROM UNSYNCEDDATA"
-
-    async with read_semaphore:
-        async with aiosqlite.connect(_DATABASE) as connection:
-            data : Any = None
-            try:
-                cursor = await connection.execute(sql)
-                data = await cursor.fetchall()
-            except aiosqlite.OperationalError as e:
-                _log.error(f"{type(e).__name__} raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
-
-            return data
-
 # sql writer
 def _composer(data: Any) -> str | None:
 
     sql = None
     if data['to_unsynced']:
-        sql = Schema.Unsynced.compose_insert(data)
+
+        if data['origin'] == 'locstorage_unsynced':
+            sql = None
+        else:
+            sql = Schema.Unsynced.compose_insert(data)
 
     elif data['topic'] == Topics.SINK_DATA:
         sql = Schema.SinkData.compose_insert(SinkData.from_payload(data['payload']))
@@ -299,9 +293,14 @@ def _composer(data: Any) -> str | None:
     return sql
 
 # sql executor
-async def _executor(write_lock: asyncio.Lock, connection: aiosqlite.Connection, data: Any):
-    # compose sql statement
-    sql = _composer(data)
+async def _executor(write_lock: asyncio.Lock, db_conn: aiosqlite.Connection, data: Any = None, command: str | None = None):
+
+    sql = ''
+    if command:
+        sql = command
+    elif data:
+        sql = _composer(data)
+
     if not sql:
         return
 
@@ -313,8 +312,8 @@ async def _executor(write_lock: asyncio.Lock, connection: aiosqlite.Connection, 
     async with write_lock:
         for _ in range (3):
             try:
-                await connection.execute(sql)
-                await connection.commit()
+                await db_conn.execute(sql)
+                await db_conn.commit()
                 break
             except aiosqlite.OperationalError as e:
                 err.append(f"Unhandled OperationalError exception raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
@@ -345,7 +344,7 @@ async def init() -> int:
 
     # generate schemas
     try:
-        async with aiosqlite.connect(_DATABASE) as db:
+        async with aiosqlite.connect(_DATABASE) as db_conn:
             tables = [
                 Schema.SinkData.create_table(),
                 Schema.SensorDevice.create_table(),
@@ -356,41 +355,177 @@ async def init() -> int:
             # execute and append to results
             results = []
             for c in tables:
-                results.append(await db.execute(c))
+                results.append(await db_conn.execute(c))
             # then commit
-            await db.commit()
+            await db_conn.commit()
 
             init_stat = status.SUCCESS
             _log.debug(f"Database initialization successful ({init.__name__})")
             
     except aiosqlite.Error as e:
-        await db.rollback()
+        await db_conn.rollback()
         _log.error(f"Database init at {init.__name__} raised error: {str(e)}")
         init_stat = status.FAILED
 
     return init_stat
 
+# pushes unsynced data from sqlite to the api
+# puts the unsynced data to the taskamanger queue
+# this should be run as a coroutine and should put items into the queue in chunks
+async def push_unsynced(read_semaphore: asyncio.Semaphore,
+                        write_lock: asyncio.Lock,
+                        taskmanager_q: multiprocessing.Queue,
+                        db_conn: aiosqlite.Connection,
+                        async_q: asyncio.Queue,
+                        locstorage_q: multiprocessing.Queue,
+                        chunks: int = 5) -> Any:
+
+    sql = "SELECT * FROM UnsyncedData"
+
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _log.error(f"Unable to get running event loop (exception: {type(e).__name__}): {str(e.__cause__) if e.__cause__ else str(e)}")
+        return
+
+    async with read_semaphore:
+        try:
+            cursor = await db_conn.execute(sql)
+        except aiosqlite.OperationalError as e:
+            _log.error(f"{type(e).__name__} raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
+        except Exception as e:
+            _log.error(f"Unhandled unexpected {type(e).__name__} at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
+
+    proceed_fetch = True
+    count = 0
+    with ThreadPoolExecutor() as pool:
+        start_signal = {
+            'signal': 'push-unsynced-running'
+        }
+        await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, start_signal)
+        try:
+            while True:
+
+                rows = []
+                if proceed_fetch:
+                    rows = await cursor.fetchmany(size=chunks)
+
+                if not rows and proceed_fetch:
+                    break
+
+                else:
+                # NOTE item: [task_id, topic, origin, timestamp, payload]
+                    for item in rows:
+                        task_dict = {
+                            'task_id': item[0],
+                            'topic': item[1],
+                            'origin': 'locstorage-unsynced',
+                            'timestamp': item[3],
+                            'payload': item[4]
+                        }
+                        await loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task_dict)
+
+                # chunk done await
+                # receive the hash id of the items that are done and to be deleted
+                signal = await async_q.get()
+
+                if signal['signal'] == 'unsynced-chunk-done':
+                    proceed_fetch = True
+                    for hash_id in signal['data']['hash_ids']:
+                        sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
+                        await _executor(
+                            write_lock=write_lock,
+                            db_conn=db_conn,
+                            command=sql
+                        )
+                        count += 1
+
+                elif signal['signal'] == 'abandon-task' and signal['cause'] == 'api-disconnect':
+                    proceed_fetch = False
+                    for hash_id in signal['data']['hash_ids']:
+                        sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
+                        await _executor(
+                                write_lock=write_lock,
+                                db_conn=db_conn,
+                                command=sql
+                            )
+                        count += 1
+                    _log.warning(f"Syncing of unsynced data to API cancelled by signal: {signal['signal']} with cause \'{signal['cause']}\'")
+
+        except (KeyboardInterrupt, asyncio.CancelledError) as e:
+            _log.warning(f"{__name__}.push_unsynced task received {type(e).__name__}, cancelling execution of task")
+
+    remaining = await cursor.fetchall()
+    _log.info(f"Uploaded {count} items from local storage unsynced data with {len(list(remaining))} remaining items")
+
+# this modules internal trigger handler
+async def _trigger_handler(
+        trigger: Dict,
+        read_semaphore: asyncio.Semaphore,
+        write_lock: asyncio.Lock,
+        db_conn: aiosqlite.Connection,
+        push_unsynced_q: asyncio.Queue,
+        locstorage_q: multiprocessing.Queue,
+        taskmanager_q: multiprocessing.Queue,
+        running_ts: List[Callable]) -> Any:
+
+    task = None
+    if trigger['context'] == 'api-connection-state':
+
+        if trigger['data']['status'] == status.CONNECTED:
+            if push_unsynced in running_ts:
+                pass
+            else:
+                _log.info(f"Connection to API restored, uploading unsynced data from local storage")
+                await push_unsynced(
+                    read_semaphore=read_semaphore,
+                    write_lock=write_lock,
+                    taskmanager_q=taskmanager_q,
+                    db_conn=db_conn,
+                    async_q=push_unsynced_q,
+                    locstorage_q=locstorage_q
+                )
+
+        elif trigger['data']['status'] == status.DISCONNECTED:
+            signal = {
+                'signal': 'abandon-task',
+                'cause': 'api-disconnect'
+            }
+            await push_unsynced_q.put(signal)
+
+    elif trigger['context'] == 'unsynced-chunk-done':
+        signal = {
+            'signal': trigger['context'],
+            'data': trigger['data']
+        }
+        await push_unsynced_q.put(signal)
+
+    return
+
 #
-async def start(storage_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue) -> None:
+async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, httpclient_q: multiprocessing.Queue) -> None:
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
         _log.error(f"Unable to get running event loop (exception: {type(e).__name__}): {str(e)}")
         return
 
+    # vars
     write_lock = asyncio.Lock()
     read_semaphore = asyncio.Semaphore(4)
     tasks: set[asyncio.Task] = set()
+    push_unsynced_q = asyncio.Queue()
+    running_ts = []
 
     try:
         flag = False
         with ThreadPoolExecutor() as pool:
 
-            async with aiosqlite.connect(_DATABASE) as db:
+            async with aiosqlite.connect(_DATABASE) as db_conn:
 
                 # write-ahead logging
-                await db.execute("PRAGMA journal_mode=WAL;")
-                await db.commit()
+                await db_conn.execute("PRAGMA journal_mode=WAL;")
+                await db_conn.commit()
 
                 while True:
 
@@ -399,15 +534,28 @@ async def start(storage_q: multiprocessing.Queue, taskmanager_q: multiprocessing
                         flag = not flag
 
                     try:
-                        data = await loop.run_in_executor(pool, get_from_queue, storage_q, __name__)
+                        data = await loop.run_in_executor(pool, get_from_queue, locstorage_q, __name__)
 
-                        # if data and list(data.keys()).count('asfasd'):
-                        #     sync_t = asyncio.create_task(push_unsynced(read_semaphore, write_lock, taskmanager_q))
-                        #     tasks.add(task)
-                        #     sync_t.add_done_callback(tasks.discard)
-
-                        if data:
-                            task = asyncio.create_task(_executor(write_lock, db, data))
+                        if data and list(data.keys()).count('trigger'):
+                            task = asyncio.create_task(_trigger_handler(
+                                trigger=data,
+                                read_semaphore=read_semaphore,
+                                write_lock=write_lock,
+                                db_conn=db_conn,
+                                push_unsynced_q=push_unsynced_q,
+                                locstorage_q=locstorage_q,
+                                taskmanager_q=taskmanager_q,
+                                running_ts=running_ts
+                            ))
+                        elif data and list(data.keys()).count('signal'):
+                            if data['signal'] == 'push_unsynced_started':
+                                running_ts.append(push_unsynced)
+                        elif data:
+                            task = asyncio.create_task(_executor(
+                                write_lock=write_lock, 
+                                db_conn=db_conn,
+                                data=data
+                            ))
                             tasks.add(task)
                             task.add_done_callback(tasks.discard)
 

@@ -430,20 +430,6 @@ class SensorAlerts:
     NORMAL_SOIL_MOISTURE = 41
     LOW_SOIL_MOISTURE = 42
 
-    # NOTE: modify sensor alerts to accomodate this shape:
-    #{
-    #   'device_id':
-    #   'timestamp':
-    #   'alert_code':
-    #   'readings': {
-    #                   'soil_moisture':
-    #                   'humidity':
-    #                   'temperature':
-    #                   'battery_level':
-    #               }
-    #}
-    #
-
     # maps the payload from the 'smmic/sensor/alert' topic
     # assuming that the shape of the payload (as a string) is:
     # ---------

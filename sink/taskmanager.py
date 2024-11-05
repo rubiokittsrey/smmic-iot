@@ -126,6 +126,7 @@ def _trigger_handler(trigger: Dict,
     if trigger['context'] == 'api-connection-status':
 
         if trigger['data']['status'] == status.CONNECTED:
+            # if the trigger has 'status.CONNECTED' send to local storage
             dest.append((locstorage_q, {**trigger, 'trigger': True}))
         else:
             dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
@@ -191,7 +192,7 @@ async def start(
         _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q))
+            aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q, httpclient_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
@@ -235,7 +236,7 @@ async def start(
 
                     #
                     # data shape:
-                    # {     
+                    # {
                     #       'topic': str,
                     #       'timestamp': datetime,
                     #       'payload': str,
@@ -248,7 +249,10 @@ async def start(
                         d_keys = list(data.keys())
                         if 'status' not in d_keys:
                             data.update({
-                                    'status': status.PENDING,
+                                    'status': status.PENDING
+                                })
+                        if 'task_id' not in d_keys:
+                            data.update({
                                     'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
                                 })
                         _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())

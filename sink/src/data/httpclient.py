@@ -127,7 +127,6 @@ async def api_check() -> Tuple[int, Dict | None, List[Tuple[str, str, str]]]:
     return chk_stat, body, errs
 
 # TODO: documentation
-_API_STATUS : int = status.DISCONNECTED
 async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, triggers_q: multiprocessing.Queue) -> None:
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
@@ -139,7 +138,7 @@ async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocess
     except Exception as e:
         _log.error(f"Failed to acquire event loop (exception: {type(e).__name__}): {str(e)}")
         return
-    
+
     # acquire a aiohttp.ClientSession object
     # in order to allow non-blocking http requests to execute
     client: aiohttp.ClientSession | None = None
