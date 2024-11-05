@@ -244,7 +244,7 @@ class Schema:
                 if field == 'task_id':
                     val_arr.append(data['task_id'])
                 elif field == 'timestamp':
-                    val_arr.append(str(datetime.now()))
+                    val_arr.append(data['timestamp'])
                 else:
                     val_arr.append(data[field])
 
@@ -399,10 +399,7 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
     proceed_fetch = True
     count = 0
     with ThreadPoolExecutor() as pool:
-        start_signal = {
-            'signal': 'push-unsynced-running'
-        }
-        await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, start_signal)
+        await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, {'signal': 'push_unsynced_running'})
         try:
             while True:
 
@@ -419,7 +416,7 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
                         task_dict = {
                             'task_id': item[0],
                             'topic': item[1],
-                            'origin': 'locstorage-unsynced',
+                            'origin': 'locstorage_unsynced',
                             'timestamp': item[3],
                             'payload': item[4]
                         }
@@ -429,7 +426,7 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
                 # receive the hash id of the items that are done and to be deleted
                 signal = await async_q.get()
 
-                if signal['signal'] == 'unsynced-chunk-done':
+                if signal['signal'] == 'unsynced_chunk_done':
                     proceed_fetch = True
                     for hash_id in signal['data']['hash_ids']:
                         sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
@@ -440,7 +437,7 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
                         )
                         count += 1
 
-                elif signal['signal'] == 'abandon-task' and signal['cause'] == 'api-disconnect':
+                elif signal['signal'] == 'abandon_task' and signal['cause'] == 'api_disconnect':
                     proceed_fetch = False
                     for hash_id in signal['data']['hash_ids']:
                         sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
@@ -452,8 +449,16 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
                         count += 1
                     _log.warning(f"Syncing of unsynced data to API cancelled by signal: {signal['signal']} with cause \'{signal['cause']}\'")
 
+            await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, {'signal': 'push_unsynced_done'})
+
         except (KeyboardInterrupt, asyncio.CancelledError) as e:
             _log.warning(f"{__name__}.push_unsynced task received {type(e).__name__}, cancelling execution of task")
+            remaining = await cursor.fetchall()
+            _log.info(f"Uploaded {count} items from local storage unsynced data with {len(list(remaining))} remaining items")
+            return
+        
+        except Exception as e:
+            _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}.push_unsynced(): {str(e.__cause__) if e.__cause__ else str(e)}")
 
     remaining = await cursor.fetchall()
     _log.info(f"Uploaded {count} items from local storage unsynced data with {len(list(remaining))} remaining items")
@@ -470,7 +475,7 @@ async def _trigger_handler(
         running_ts: List[Callable]) -> Any:
 
     task = None
-    if trigger['context'] == 'api-connection-state':
+    if trigger['context'] == 'api_connection_status':
 
         if trigger['data']['status'] == status.CONNECTED:
             if push_unsynced in running_ts:
@@ -488,12 +493,12 @@ async def _trigger_handler(
 
         elif trigger['data']['status'] == status.DISCONNECTED:
             signal = {
-                'signal': 'abandon-task',
-                'cause': 'api-disconnect'
+                'signal': 'abandon_task',
+                'cause': 'api_disconnect'
             }
             await push_unsynced_q.put(signal)
 
-    elif trigger['context'] == 'unsynced-chunk-done':
+    elif trigger['context'] == 'unsynced_chunk_done':
         signal = {
             'signal': trigger['context'],
             'data': trigger['data']
@@ -547,9 +552,15 @@ async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocess
                                 taskmanager_q=taskmanager_q,
                                 running_ts=running_ts
                             ))
+                            tasks.add(task)
+                            task.add_done_callback(tasks.discard)
+
                         elif data and list(data.keys()).count('signal'):
-                            if data['signal'] == 'push_unsynced_started':
+                            if data['signal'] == 'push_unsynced_running':
                                 running_ts.append(push_unsynced)
+                            if data['signal'] == 'push_unsynced_done':
+                                running_ts.remove(push_unsynced)
+
                         elif data:
                             task = asyncio.create_task(_executor(
                                 write_lock=write_lock, 
@@ -574,3 +585,6 @@ async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocess
         await asyncio.gather(*tasks, return_exceptions=True)
 
         return
+    
+    except Exception as e:
+        _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")

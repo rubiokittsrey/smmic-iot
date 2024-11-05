@@ -85,7 +85,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
             if data['topic'] in test_topics:
                 await _dev_test_task(data)
 
-            if data['topic'] in aiosqlite_queue_topics:
+            if data['topic'] in aiosqlite_queue_topics and data['origin'] != 'locstorage_unsynced':
                 dest.append((locstorage_q, {**data, 'to_unsynced': False}))
 
             if data['topic'] in aiohttp_queue_topics:
@@ -115,27 +115,30 @@ async def _delegator(semaphore: asyncio.Semaphore,
     return
 
 # passes the triggers into the concerned subprocess(es)
-def _trigger_handler(trigger: Dict,
+async def _trigger_handler(trigger: Dict,
                      sysmonitor_q: multiprocessing.Queue,
                      locstorage_q: multiprocessing.Queue,
                      httpclient_q: multiprocessing.Queue,
                      hardware_q: multiprocessing.Queue,
+                     loop: asyncio.AbstractEventLoop
                      ) -> Any:
     dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
-    if trigger['context'] == 'api-connection-status':
+    if trigger['context'] == 'api_connection_status':
 
         if trigger['data']['status'] == status.CONNECTED:
             # if the trigger has 'status.CONNECTED' send to local storage
             dest.append((locstorage_q, {**trigger, 'trigger': True}))
         else:
+            dest.append((locstorage_q, {**trigger, 'trigger': True}))
             dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
 
         # if trigger['origin'] != httpclient.alias:
         #     dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
 
-    for _queue, _trigger in dest:
-        put_to_queue(queue=_queue, name=__name__, data=_trigger, nowait=True)
+    with ThreadPoolExecutor() as pool:
+        for _queue, _trigger in dest:
+            await loop.run_in_executor(pool, put_to_queue, _queue, __name__, _trigger)
 
     return
 
@@ -184,7 +187,7 @@ async def start(
         'sysmonitor_q': sysmonitor_q,
         'httpclient_q':httpclient_q,
         'hardware_q': hardware_q,
-        'locstorage_q': locstorage_q
+        'locstorage_q': locstorage_q,
     }
 
     tasks: Set[asyncio.Task] = set()
@@ -226,17 +229,19 @@ async def start(
                     #
                     if trigger:
                         _log.info(f"{alias} received trigger: {trigger['context']}".capitalize())
+                        print(trigger)
 
-                        if trigger['context'] == 'api-connection-status':
+                        if trigger['context'] == 'api_connection_status':
                             api_status = trigger['data']['status']
 
-                        task = asyncio.create_task(_trigger_handler(**queues_kwargs, trigger=trigger))
+                        task = asyncio.create_task(_trigger_handler(**queues_kwargs, trigger=trigger, loop=loop))
                         tasks.add(task)
                         task.add_done_callback(tasks.discard)
 
                     #
                     # data shape:
                     # {
+                    #       'origin': taskmanager
                     #       'topic': str,
                     #       'timestamp': datetime,
                     #       'payload': str,
@@ -247,14 +252,22 @@ async def start(
                     #
                     if data:
                         d_keys = list(data.keys())
+
                         if 'status' not in d_keys:
                             data.update({
                                     'status': status.PENDING
                                 })
+
                         if 'task_id' not in d_keys:
                             data.update({
                                     'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
                                 })
+
+                        if 'origin' not in d_keys:
+                            data.update({
+                                'origin': 'taskmanager'
+                            })
+
                         _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())
 
                         task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)) # pass api status flag to delegator

@@ -61,7 +61,7 @@ async def start(hardware_q: multiprocessing.Queue, taskmanager_q: multiprocessin
             try:
                 asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
             except NameError as e:
-                _log.info(f'{alias} starting with irrigation module disabled')
+                _log.info(f'{alias} starting with irrigation module disabled'.capitalize())
             with ThreadPoolExecutor() as pool:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)
@@ -77,6 +77,6 @@ async def start(hardware_q: multiprocessing.Queue, taskmanager_q: multiprocessin
 
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
-        
+
         except Exception as e:
             _log.error(f"Unhandled exception raised at PID {os.getpid()} ({__name__}): {str(e)}")

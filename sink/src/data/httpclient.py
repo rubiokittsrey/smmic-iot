@@ -62,9 +62,16 @@ async def _router(semaphore: asyncio.Semaphore,
         if status_code == status.SUCCESS:
             pass
         else:
+
+            if 'origin' not in list(task.keys()):
+                task.update({'origin': alias})
+
+            # if the origin of the task is taskmanager, override
+            elif task['origin'] == 'taskmanager':
+                task.update({'origin': alias})
+
             task.update({
                     'status': status.FAILED,
-                    'origin': alias,
                     'cause': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in errs]
                 })
             # return task to taskmanager queue as failed task
@@ -78,9 +85,9 @@ async def _router(semaphore: asyncio.Semaphore,
                         # send trigger to taskamanager
                         trigger = {
                             'origin': alias,
-                            'context': 'api-connection-status',
+                            'context': 'api_connection_status',
                             'data': {
-                                'timestamp': datetime.now(),
+                                'timestamp': (str(datetime.now())),
                                 'status': status_code,
                                 'errs': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in errs],
                             }
@@ -88,6 +95,41 @@ async def _router(semaphore: asyncio.Semaphore,
                         loop.run_in_executor(pool, put_to_queue, triggers_q, __name__, trigger)
 
         return
+
+# the task buffer in between the router and the main listening function
+# that orders the tasks by priority
+async def _tasks_buffer(queue: asyncio.PriorityQueue,
+                        semaphore: asyncio.Semaphore,
+                        client_session: aiohttp.ClientSession,
+                        taskmanager_q: multiprocessing.Queue,
+                        triggers_q: multiprocessing.Queue
+                        ):
+
+    # TODO: implement chunk done send trigger
+    tasks: set[asyncio.Task] = set()
+    synced_items = []
+
+    try:
+        while True:
+            priority, t_data = await queue.get()
+
+            task = asyncio.create_task(_router(
+                    semaphore=semaphore,
+                    task=t_data,
+                    client_session=client_session,
+                    taskmanager_q=taskmanager_q,
+                    triggers_q=triggers_q
+                ))
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+            if t_data['origin'] == 'locstorage_unsynced':
+                task.add_done_callback(lambda f: synced_items.append(t_data['task_id']))
+
+            await asyncio.sleep(0.5)
+
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        await asyncio.gather(*tasks)
 
 # checks api health with the /health end point
 # returns:
@@ -126,8 +168,10 @@ async def api_check() -> Tuple[int, Dict | None, List[Tuple[str, str, str]]]:
 
     return chk_stat, body, errs
 
-# TODO: documentation
-async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue, triggers_q: multiprocessing.Queue) -> None:
+async def start(httpclient_q: multiprocessing.Queue,
+                taskmanager_q: multiprocessing.Queue,
+                triggers_q: multiprocessing.Queue) -> None:
+    
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
@@ -138,7 +182,7 @@ async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocess
     except Exception as e:
         _log.error(f"Failed to acquire event loop (exception: {type(e).__name__}): {str(e)}")
         return
-
+    
     # acquire a aiohttp.ClientSession object
     # in order to allow non-blocking http requests to execute
     client: aiohttp.ClientSession | None = None
@@ -147,21 +191,39 @@ async def start(httpclient_q: multiprocessing.Queue, taskmanager_q: multiprocess
     except Exception as e:
         _log.error(f"{alias} failed to create client session object: {str(e)}")
         return
-
+    
     if loop and client:
-        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
+        priority_queue = asyncio.PriorityQueue()
+
+        _router_kwargs = {
+            'semaphore': semaphore,
+            'client_session': client,
+            'taskmanager_q': taskmanager_q,
+            'triggers_q': triggers_q
+        }
+        t_buffer_task = asyncio.create_task(_tasks_buffer(priority_queue, **_router_kwargs))
 
         try:
             with ThreadPoolExecutor() as pool:
                 while True:
-                    task = await loop.run_in_executor(pool, get_from_queue, httpclient_q, __name__) # non-blocking message
+                    task = await loop.run_in_executor(pool, get_from_queue, httpclient_q, __name__)
 
-                    # if an item is retrieved
                     if task:
-                        asyncio.create_task(_router(semaphore, task, client, taskmanager_q, triggers_q))
+                        priority = 0.0
+                        p_multiplier = 1
+
+                        # TODO: implement priority setting
+                        task['timestamp']
+                        parsed_dt = datetime.strptime(task['timestamp'], "%Y-%m-%d %H:%M:%S.%f")
+                        unix_t = parsed_dt.timestamp()
+
+                        priority = unix_t * -p_multiplier
+
+                        await priority_queue.put((priority, task))
 
                     await asyncio.sleep(0.1)
 
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            # close the aiohttp session client
+        except (asyncio.CancelledError, KeyboardInterrupt) as e:
+            await asyncio.gather(t_buffer_task)
             await client.close()
+            return

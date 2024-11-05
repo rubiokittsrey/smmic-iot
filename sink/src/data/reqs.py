@@ -58,6 +58,9 @@ def _req_decorator(func: Callable) -> Any:
                 err_logs.append(f"Exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(err_msg) if err_msg else str(e)}")
                 errs.append((type(e).__name__, str(e), f'{str(err_msg) if err_msg else ''}'))
 
+                if type(e) == aiohttp.ClientResponseError:
+                    break
+
             except Exception as e:
                 err_logs.append(f"Unhandled exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(e.__cause__)}")
             # except aiohttp.ClientTimeout as e:
@@ -81,8 +84,8 @@ def _req_decorator(func: Callable) -> Any:
 
         # if err length == retries, request failed
         # put err names into the list and assign to result
-        if len(err_logs) == retries:
-            _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {retries} attempts)")
+        if len(err_logs) == retries or 'ClientResponseError' in [name for name, msg, cause in errs]:
+            _log.warning(f"Request statistics -> {func.__name__} took {end-start} seconds to finish (failed after {attempt + 1} attempt(s))")
         else:
             _log.debug(f"Request statistics -> {func.__name__} took {end-start} seconds to finish after {attempt + 1} attempts(s)")
 

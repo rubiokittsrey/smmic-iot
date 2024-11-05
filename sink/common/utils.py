@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging as _logging
+import multiprocessing.queues
 import settings
 import os
 import re
 import logging
 import multiprocessing
-import queue
+import queue as qlib
 from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
@@ -475,6 +476,8 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
     msg: dict | None = None
     try:
         msg = queue.get(timeout=0.1)
+    except qlib.Empty:
+        pass
     except Exception as e:
         if not queue.empty():
             _logs.error(f"Unhandled exception {type(e).__name__} raised while getting items from queue ({name}): {str(e.__cause__) if e.__cause__ else str(e)}")

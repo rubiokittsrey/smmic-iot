@@ -6,6 +6,7 @@ import os
 import multiprocessing
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
+from datetime import datetime
 
 # internal
 from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE
@@ -228,7 +229,7 @@ class Handler:
         # timestamp: the message timestamp #NOTE: either when it was sent or received (idk yet)}
         # --->
         topic = message.topic
-        timestamp = message.timestamp
+        timestamp = str(datetime.now())
         payload = str(message.payload.decode('utf-8'))
         try:
             if topic.startswith("$SYS"):

@@ -1,7 +1,7 @@
 # the system monitoring module
 # description -->>
 # TODO: documentation
-alias = __name__
+alias = 'sysmonitor'
 
 # third-party
 import os
@@ -74,6 +74,15 @@ def _from_sys_queue(queue: multiprocessing.Queue) -> dict | None:
 async def _put_to_queue(queue: multiprocessing.Queue):
     msg: dict | None = {}
 
+    loop = None
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _log.error(f"{__name__}._put_to_queue() is unabled to acquire running loop: {str(e)}")
+
+    if not loop:
+        return
+
     try:
         while True:
             await asyncio.sleep(300) # execute every 5 minutes
@@ -90,13 +99,16 @@ async def _put_to_queue(queue: multiprocessing.Queue):
             data : str = ''
             for d in _d:
                 data = data + f'&{d}'
-            payload = f'{APPConfigurations.CLIENT_ID};{datetime.now()};{data}'
-            msg.update({'topic':Topics.SINK_DATA, 'payload':f'{payload}'})
+            timestamp = str(datetime.now())
+            payload = f'{APPConfigurations.CLIENT_ID};{timestamp};{data}'
+            msg.update({'topic':Topics.SINK_DATA, 'payload':f'{payload}', 'timestamp': timestamp})
 
             try:
-                queue.put(msg)
+                with ThreadPoolExecutor() as pool:
+                    await loop.run_in_executor(pool, put_to_queue, queue, __name__, msg)
             except Exception as e:
                 _log.error(f"Cannot put message to queue -> __put_to_queue__ @ PID {os.getpid()}: {str(e)}")
+
     except (KeyboardInterrupt, asyncio.CancelledError):
         return
 
@@ -182,9 +194,9 @@ async def _periodic_api_chk(triggers_q: multiprocessing.Queue, no_wait_start = F
 
     trigger = {
         'origin': alias,
-        'context': 'api-connection-status',
+        'context': 'api_connection_status',
         'data': {
-            'timestamp': datetime.now(),
+            'timestamp': str(datetime.now()),
             'status': status.CONNECTED if chk_stat == status.SUCCESS else status.DISCONNECTED,
             'errs': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in chk_errs],
         }
@@ -227,7 +239,7 @@ async def start(sys_queue: multiprocessing.Queue, taskmanager_q: multiprocessing
                     if item:
                         # triggers have separate handling logic
                         if list(item.keys()).count('trigger'):
-                            if item['context'] == 'api-connection-status':
+                            if item['context'] == 'api_connection_status':
                                 if item['data']['status'] == status.DISCONNECTED and not _PERIODIC_CHK_FLAG:
                                     _PERIODIC_CHK_FLAG = True
                                     while_run_chk = asyncio.create_task(_periodic_api_chk(triggers_q=triggers_q, no_wait_start=True))
