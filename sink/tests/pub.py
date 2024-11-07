@@ -14,10 +14,10 @@ import os
 # internal
 from settings import Broker, DevTopics, APPConfigurations
 sys.path.append(APPConfigurations.SRC_PATH)
-from mqtt import client
-from utils import log_config, Modes
+from mqtt import mqttclient
+from utils import logger_config, Modes
 
-log = log_config(logging.getLogger(__name__))
+log = logger_config(logging.getLogger(__name__))
 
 def on_pub(client, userdata, mid):
     print(f"data published: {msg}")
@@ -39,7 +39,7 @@ def publish(client: mqtt.Client, topic) -> bool:
 
 # TODO: refactor this unit test!!!!
 def init_client() -> mqtt.Client | None:
-    client.start_callback_client()
+    mqttclient.start_callback_client()
     if not callback_client:
         log.error('src.mqtt.client.get_client() returned empty or without a valid client')
         return None

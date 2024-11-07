@@ -15,10 +15,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
 from httpclient import api_check
-from utils import log_config, is_num, get_from_queue, status, put_to_queue
-from settings import APPConfigurations, Topics
+from utils import logger_config, is_num, get_from_queue, status, put_to_queue
+from settings import APPConfigurations, Topics, Registry
 
-_log = log_config(logging.getLogger(alias))
+# settings configurations
+alias = Registry.Modules.SystemMonitor.alias
+_log = logger_config(logging.getLogger(alias))
 
 _CONNECTED_CLIENTS : int = 0
 _CLIENTS_TOTAL : int = 0
@@ -194,11 +196,11 @@ async def _periodic_api_chk(triggers_q: multiprocessing.Queue, no_wait_start = F
 
     trigger = {
         'origin': alias,
-        'context': 'api_connection_status',
+        'context': Registry.Triggers.contexts.API_CONNECTION_STATUS,
         'data': {
             'timestamp': str(datetime.now()),
             'status': status.CONNECTED if chk_stat == status.SUCCESS else status.DISCONNECTED,
-            'errs': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in chk_errs],
+            'errs': [(name, msg, cause) for name, msg, cause in chk_errs],
         }
     }
     with ThreadPoolExecutor() as pool:

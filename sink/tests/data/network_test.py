@@ -9,7 +9,7 @@ sys.path.append(settings.APPConfigurations.SRC_PATH)
 import logging
         
 from hardware import network
-from utils import Modes, log_config
+from utils import Modes, logger_config
 import argparse
 
 # debugging

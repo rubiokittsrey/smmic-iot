@@ -3,10 +3,12 @@ import subprocess
 import logging
 from typing import Literal
 
-from utils import status, log_config
-import settings
+from utils import status, logger_config
+from settings import Broker, Registry
 
-_log = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.Service.alias
+_log = logger_config(logging.getLogger(__name__))
 
 def mqtt_status_check() -> int:
     try:
@@ -17,7 +19,7 @@ def mqtt_status_check() -> int:
             )
         if "Active: active (running)" in result.stdout:
             # TODO: implement checking which port mosquitto.service is listening to
-            _log.warning(f'Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port {settings.Broker.PORT}')
+            _log.warning(f'Cannot identify the port mosquitto.service is listening to. Application will proceed to use default port {Broker.PORT}')
             return status.ACTIVE
         elif "Active: inactive (dead)" in result.stdout:
             _log.error(f'mosquitto.service status: dead! Please start the mosquitto.service and then rerun status check')

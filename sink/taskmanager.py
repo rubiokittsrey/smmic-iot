@@ -3,8 +3,6 @@
 #
 #
 
-alias = "task-manager"
-
 # third-party
 import multiprocessing
 import asyncio
@@ -17,15 +15,17 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Dict, List, Tuple, Set
 
 # internal helpers, configs
-from utils import (log_config,
+from utils import (logger_config,
                    set_priority, priority,
                    get_from_queue, put_to_queue,
                    SensorAlerts,
                    status)
-from settings import APPConfigurations, Topics
+from settings import APPConfigurations, Topics, Registry
 from src.data import sysmonitor, locstorage, httpclient
 
-_log = log_config(logging.getLogger(__name__))
+# configurations, settings
+_log = logger_config(logging.getLogger(__name__))
+alias = Registry.Modules.TaskManager.alias
 
 # unimplemented priority class for tasks
 # not sure how to implement this yet
@@ -77,7 +77,7 @@ async def _delegator(semaphore: asyncio.Semaphore,
         if data['status'] == int(status.FAILED):
 
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
-            if data['origin'] == httpclient.alias:
+            if data['origin'] == Registry.Modules.HttpClient.alias:
                 dest.append((locstorage_q, {**data, 'to_unsynced': True}))
 
         else:
@@ -124,7 +124,7 @@ async def _trigger_handler(trigger: Dict,
                      ) -> Any:
     dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
-    if trigger['context'] == 'api_connection_status':
+    if trigger['context'] == Registry.Triggers.contexts.API_CONNECTION_STATUS:
 
         if trigger['data']['status'] == status.CONNECTED:
             # if the trigger has 'status.CONNECTED' send to local storage
@@ -135,6 +135,10 @@ async def _trigger_handler(trigger: Dict,
 
         # if trigger['origin'] != httpclient.alias:
         #     dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
+
+    elif trigger['context'] == Registry.Triggers.contexts.UNSYNCED_DATA:
+
+        dest.append((locstorage_q, {**trigger, 'trigger': True}))
 
     with ThreadPoolExecutor() as pool:
         for _queue, _trigger in dest:
@@ -158,7 +162,7 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * msg_queue: the message queue that the mqtt client sends messages to. items from this queue are identified and delegated in this task manager module
 # * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
-#
+
 async def start(
         taskmanager_q: multiprocessing.Queue,
         httpclient_q: multiprocessing.Queue,
@@ -229,9 +233,8 @@ async def start(
                     #
                     if trigger:
                         _log.info(f"{alias} received trigger: {trigger['context']}".capitalize())
-                        print(trigger)
 
-                        if trigger['context'] == 'api_connection_status':
+                        if trigger['context'] == Registry.Triggers.contexts.API_CONNECTION_STATUS:
                             api_status = trigger['data']['status']
 
                         task = asyncio.create_task(_trigger_handler(**queues_kwargs, trigger=trigger, loop=loop))
@@ -247,7 +250,9 @@ async def start(
                     #       'payload': str,
                     #       'status': int (tasks with failed statuses are tasks that are fed back into the tmanager_q by subprocesses),
                     #       'task_id': str (hash id of the task's topic and payload),
-                    #       'cause': [{'errname': str, 'errmsg': str, 'errcause': str}] (if failed)
+                    #       
+                    #       (if task failed, a cause field is added)
+                    #       'cause': [(errname, errmsg, errcause)]
                     # }
                     #
                     if data:
@@ -265,7 +270,7 @@ async def start(
 
                         if 'origin' not in d_keys:
                             data.update({
-                                'origin': 'taskmanager'
+                                'origin': alias
                             })
 
                         _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())

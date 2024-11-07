@@ -48,7 +48,7 @@ class status:
 
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
-def log_config(logger) -> _logging.Logger:
+def logger_config(logger) -> _logging.Logger:
     global _LOGGER_LIST
     _LOGGER_LIST.append(logger)
     logger.setLevel(_logging.DEBUG)
@@ -64,7 +64,7 @@ def log_config(logger) -> _logging.Logger:
 
     return logger
 
-_logs = log_config(logging.getLogger(__name__))
+_logs = logger_config(logging.getLogger(__name__))
 
 def set_logging_configuration():
     for logger in _LOGGER_LIST:
@@ -439,6 +439,11 @@ class SensorAlerts:
     # alert_code;
     # key:value&key:value; ----> the data contained in the alert
     # ---------
+    # the resulting dictionary:
+    # 'device_id': str
+    # 'timestamp': str
+    # 'alert_code': int
+    # 'data': dict{str: any}
     @staticmethod
     def map_sensor_alert(payload: str) -> Dict | None:
         final : Dict | None = {}

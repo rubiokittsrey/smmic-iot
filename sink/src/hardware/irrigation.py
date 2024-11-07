@@ -11,10 +11,12 @@ import RPi.GPIO as GPIO
 import time
 
 # internal helpers, configurations
-from utils import log_config, get_from_queue, is_num
-from settings import Channels
+from utils import logger_config, get_from_queue, is_num
+from settings import Channels, Registry
 
-_log = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.Irrigation.alias
+_log = logger_config(logging.getLogger(__name__))
 
 # the global irritaion queue dictionary
 _QUEUE : List[str] = []

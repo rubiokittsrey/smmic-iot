@@ -9,11 +9,12 @@ from typing import Any
 from datetime import datetime
 
 # internal
-from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE
-from utils import log_config, status, priority, set_priority
+from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE, Registry
+from utils import logger_config, status, priority, set_priority
 
-# internal log object
-_log = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.MqttClient.alias
+_log = logger_config(logging.getLogger(alias))
 
 # **private** variable that stores subscriptions
 # using this to track all subscriptions of mqtt client, not sure what to do with this yet
@@ -41,10 +42,10 @@ def _on_connected(client:paho_mqtt.Client, userData, flags, rc, properties) -> N
     _log.debug(f"Callback client connected to broker at {Broker.HOST}:{Broker.PORT}")
 
 def _on_disconnected(client: paho_mqtt.Client,
-                        userData: Any,
-                        disconnect_flags: paho_mqtt.DisconnectFlags,
-                        rc: reasoncodes.ReasonCode,
-                        properties: properties.Properties) -> None:
+                     userData: Any,
+                     disconnect_flags: paho_mqtt.DisconnectFlags,
+                     rc: reasoncodes.ReasonCode,
+                     properties: properties.Properties) -> None:
     _log.warning(f"Callback client has been disconnected from broker: {rc}")
 
 def _on_pub(client: paho_mqtt.Client, userData: Any, mid: int, rc: reasoncodes.ReasonCode, prop: properties.Properties):
@@ -56,7 +57,7 @@ def _on_sub(client: paho_mqtt.Client, userdata, mid, reason_code_list, propertie
     _log.debug(f"Callback client subscribed to topic: {_subscriptions[0]}")
     _subscriptions.pop(0)
 
-def _subscribe(client: paho_mqtt.Client | None) -> None:
+def _subscribe(client: paho_mqtt.Client) -> None:
     smmic_t, sys_t = Topics.get_topics()
     topics = smmic_t + sys_t
 
@@ -64,7 +65,6 @@ def _subscribe(client: paho_mqtt.Client | None) -> None:
 
     global _subscriptions
 
-    if not client: return
     for topic in topics:
         if topic.count('/') == 0:
             continue
@@ -236,6 +236,7 @@ class Handler:
                 self._sys_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
             else:
                 self._task_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
+
         except Exception as e:
             _log.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}")
 

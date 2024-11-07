@@ -7,8 +7,6 @@ this is the aiohttp session module of the entire system
 # TODO: documentation
 """
 
-alias = "http-client"
-
 # third-party
 import logging
 import aiohttp
@@ -24,10 +22,12 @@ from datetime import datetime
 import reqs
 
 # internal helpers, configurations
-from utils import log_config, SinkData, SensorData, get_from_queue, SensorAlerts, status, put_to_queue
-from settings import APPConfigurations, Topics, APIRoutes, Broker
+from utils import logger_config, SinkData, SensorData, get_from_queue, SensorAlerts, status, put_to_queue
+from settings import APPConfigurations, Topics, APIRoutes, Broker, Registry
 
-_log = log_config(logging.getLogger(__name__))
+# configurations, settings
+_log = logger_config(logging.getLogger(__name__))
+alias = Registry.Modules.HttpClient.alias
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
@@ -36,7 +36,7 @@ async def _router(semaphore: asyncio.Semaphore,
                   client_session: aiohttp.ClientSession,
                   taskmanager_q: multiprocessing.Queue,
                   triggers_q: multiprocessing.Queue
-                  ) -> Any:
+                  ) -> Dict:
     # NOTE:
     # ----- data keys -> {priorty, topic, payload, timestamp}
     # ----- (sensor alert) data keys -> {device_id, timestamp, alertCode}
@@ -61,44 +61,75 @@ async def _router(semaphore: asyncio.Semaphore,
 
         if status_code == status.SUCCESS:
             pass
+
         else:
 
             if 'origin' not in list(task.keys()):
                 task.update({'origin': alias})
 
             # if the origin of the task is taskmanager, override
-            elif task['origin'] == 'taskmanager':
+            elif task['origin'] == Registry.Modules.TaskManager.alias:
                 task.update({'origin': alias})
 
             task.update({
                     'status': status.FAILED,
-                    'cause': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in errs]
+                    'cause': [(name, msg, cause) for name, msg, cause in errs]
                 })
             # return task to taskmanager queue as failed task
             # run in executor to not block thread
             loop = asyncio.get_running_loop()
             with ThreadPoolExecutor() as pool:
-                loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task)
+
+                if task['origin'] != Registry.Modules.LocalStorage.origin_unsynced:
+                    loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task)
+
                 if status_code == status.DISCONNECTED:
                     # trigger api check on sys_monitor if connection error is part of the cause
                     if aiohttp.ClientConnectorError.__name__ in [err[0] for err in errs]:
                         # send trigger to taskamanager
                         trigger = {
                             'origin': alias,
-                            'context': 'api_connection_status',
+                            'context': Registry.Triggers.contexts.API_CONNECTION_STATUS,
                             'data': {
                                 'timestamp': (str(datetime.now())),
                                 'status': status_code,
-                                'errs': [{'err_name': name, 'err_msg': msg, 'err_cause': cause} for name, msg, cause in errs],
+                                'errs': [(name, msg, cause) for name, msg, cause in errs],
                             }
                         }
                         loop.run_in_executor(pool, put_to_queue, triggers_q, __name__, trigger)
 
-        return
+        _r = {'task_data': task, 'status_code': status_code, 'errs': [(name, msg, cause) for name, msg, cause in errs]}
+        return _r
+
+async def _from_locstrg_unsynced(task: asyncio.Task, triggers_q: multiprocessing.Queue) -> bool:
+    result = False
+
+    loop = asyncio.get_running_loop()
+
+    try:
+        task_result = await task
+
+        with ThreadPoolExecutor() as pool:
+            trg = {
+                'origin': alias,
+                'context': Registry.Triggers.contexts.UNSYNCED_DATA,
+                'data': {
+                    'task_id': task_result['task_data']['task_id'],
+                    'status_code': task_result['status_code'],
+                    'errs': task_result['errs']
+                }
+            }
+            loop.run_in_executor(pool, put_to_queue, triggers_q, __name__, trg)
+            result = True
+
+    except Exception as e:
+        _log.error(f"Unhandled unexpected {type(e).__name__} raised at {alias}.{_from_locstrg_unsynced.__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
+
+    return result
 
 # the task buffer in between the router and the main listening function
 # that orders the tasks by priority
-async def _tasks_buffer(queue: asyncio.PriorityQueue,
+async def _task_buffer(queue: asyncio.PriorityQueue,
                         semaphore: asyncio.Semaphore,
                         client_session: aiohttp.ClientSession,
                         taskmanager_q: multiprocessing.Queue,
@@ -108,6 +139,13 @@ async def _tasks_buffer(queue: asyncio.PriorityQueue,
     # TODO: implement chunk done send trigger
     tasks: set[asyncio.Task] = set()
     synced_items = []
+
+    loop = None
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _log.error(f"{__name__}._task_buffer is unable to get running event loop: {str(e.__cause__) if e.__cause__ else str(e)}")
+        return
 
     try:
         while True:
@@ -123,10 +161,10 @@ async def _tasks_buffer(queue: asyncio.PriorityQueue,
             tasks.add(task)
             task.add_done_callback(tasks.discard)
 
-            if t_data['origin'] == 'locstorage_unsynced':
-                task.add_done_callback(lambda f: synced_items.append(t_data['task_id']))
+            if t_data['origin'] == Registry.Modules.LocalStorage.origin_unsynced:
+                task.add_done_callback(lambda f: asyncio.create_task(_from_locstrg_unsynced(f, triggers_q)))
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
 
     except (asyncio.CancelledError, KeyboardInterrupt):
         await asyncio.gather(*tasks)
@@ -201,7 +239,7 @@ async def start(httpclient_q: multiprocessing.Queue,
             'taskmanager_q': taskmanager_q,
             'triggers_q': triggers_q
         }
-        t_buffer_task = asyncio.create_task(_tasks_buffer(priority_queue, **_router_kwargs))
+        t_buffer_task = asyncio.create_task(_task_buffer(priority_queue, **_router_kwargs))
 
         try:
             with ThreadPoolExecutor() as pool:

@@ -13,10 +13,10 @@ from utils import Modes
 
 sys.path.append(APPConfigurations.SRC_PATH)
 
-from mqtt import client
-from utils import log_config
+from mqtt import mqttclient
+from utils import logger_config
 
-log = log_config(logging.getLogger(__name__))
+log = logger_config(logging.getLogger(__name__))
 
 topic = None
 
@@ -24,7 +24,7 @@ def callback_mqtt_test(client, userdata, msg):
     print(f"payload: {str(msg.payload.decode('utf-8'))} ({msg.topic})")
 
 def init_client() -> mqtt.Client:
-    callback_client = client.get_client()
+    callback_client = mqttclient.get_client()
     if not callback_client:
         log.error(f'src.mqtt.client.get_client() did not return with a valid client')
     return callback_client

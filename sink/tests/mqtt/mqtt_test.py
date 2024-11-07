@@ -19,13 +19,13 @@ except Exception as e:
 
 import settings
 sys.path.append(settings.APPConfigurations.SRC_PATH)
-import mqtt.client as client
+import mqtt.mqttclient as mqttclient
 import mqtt.service as service
-from utils import Modes, log_config, status
+from utils import Modes, logger_config, status
 import pub
 import sub
 
-__log__ = log_config(logging.getLogger(__name__))
+__log__ = logger_config(logging.getLogger(__name__))
 
 # terminal debugging
 if __name__ == "__main__":
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         if args.function == "start_callback_client":
             #TODO: implement events
             async def start_c_pub_task():
-                _callback_client = client.get_client()
+                _callback_client = mqttclient.get_client()
 
                 while True:
                     if _callback_client:
@@ -96,14 +96,14 @@ if __name__ == "__main__":
             async def start_c_client_test():
                 #TODO: when this thread is terminated with KeyboardInterrupt, it throws a trace error
                 __log__.debug(f'Running mqtt_test.start_callback_client() at PID: {os.getpid()}')
-                c_cli = asyncio.create_task(client.start_client(sub.callback_mqtt_test))
+                c_cli = asyncio.create_task(mqttclient.start_client(sub.callback_mqtt_test))
                 pub_task = asyncio.create_task(start_c_pub_task())
                 task_list = [c_cli, pub_task]
                 try:
                     await asyncio.gather(*task_list)
                 except asyncio.CancelledError:
                     __log__.warning(f'raised KeyboardInterrupt, cancelling mqtt_test.start_call_client() at PID: {os.getpid()}')
-                    await asyncio.gather(client.shutdown_client())
+                    await asyncio.gather(mqttclient.shutdown_client())
                 
             asyncio.run(start_c_client_test())
 

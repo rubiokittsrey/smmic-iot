@@ -191,3 +191,61 @@ class Topics:
 #     _sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
 
 #     return _topics, []
+
+class Registry:
+
+    class Triggers:
+
+        class contexts:
+            API_CONNECTION_STATUS = 'api_connection_status'
+            UNSYNCED_DATA = 'unsynced_data'
+
+    class Modules:
+        # ----- common -----
+        class Settings:
+            alias = 'settings'
+
+        class Utils:
+            alias = 'utils'
+
+        # ----- main -----
+
+        class Main:
+            alias = 'smmic'
+
+        class TaskManager:
+            alias = 'task-manager'
+
+        # ----- data -----
+
+        class LocalStorage:
+            alias = 'locstorage'
+            origin_unsynced = 'locstorage_unsynced'
+
+        class HttpClient:
+            alias = 'http-client'
+
+        class Requests:
+            alias = 'requests'
+
+        class SystemMonitor:
+            alias = 'sysmonitor'
+
+        # ----- mqtt -----
+
+        class MqttClient:
+            alias = 'mqtt-client'
+
+        class Service:
+            alias = 'service'
+        
+        # ----- hardware -----
+
+        class Hardware:
+            alias = 'hardware'
+
+        class Network:
+            alias = 'network'
+
+        class Irrigation:
+            alias = 'irrigation'

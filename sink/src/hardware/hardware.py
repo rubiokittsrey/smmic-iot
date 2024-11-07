@@ -3,8 +3,6 @@
 #
 #
 
-alias = "hardware"
-
 # third-party
 import asyncio
 import multiprocessing
@@ -14,12 +12,15 @@ from typing import Dict, Any, List, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import log_config, get_from_queue
-from settings import Topics, APPConfigurations, Broker
+from utils import logger_config, get_from_queue
+from settings import Topics, APPConfigurations, Broker, Registry
+
 if not APPConfigurations.DISABLE_IRRIGATION:
     import src.hardware.irrigation as irrigation
 
-_log = log_config(logging.getLogger(__name__))
+# configurations, settings
+alias = Registry.Modules.Hardware.alias
+_log = logger_config(logging.getLogger(alias))
 
 # hardware workers queues
 _IRRIGATION_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
@@ -32,6 +33,7 @@ def irrigation_callback(signal : int) -> None:
 # lazy implementation, straight to irrigation module
 # TODO: rework this when there are more hardware tasks added to project
 async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
+
     async with semaphore:
         task_keys : List = list(task.keys())
 

@@ -13,10 +13,12 @@ from typing import Dict, Any, Callable, List, Tuple, Any
 from decimal import Decimal
 
 # internal helpers, configs
-from settings import APPConfigurations
-from utils import log_config, status
+from settings import APPConfigurations, Registry
+from utils import logger_config, status
 
-_log = log_config(logging.getLogger(__name__))
+# settings, configuration
+alias = Registry.Modules.Requests.alias
+_log = logger_config(logging.getLogger(__name__))
 
 # internal request decorator that provides request statistics and handles exception
 # TODO: add other stats, store failed requests, implement failed request protocol

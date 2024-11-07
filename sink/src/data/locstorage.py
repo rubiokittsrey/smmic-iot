@@ -1,6 +1,6 @@
 # TODO: documentation
 # 
-# 
+#
 
 # third-party
 import aiosqlite
@@ -15,9 +15,9 @@ from typing import Any, Dict, List, Union, Callable
 from datetime import datetime
 
 # internal helpers, configurations
-from settings import APPConfigurations, Topics, Broker
+from settings import APPConfigurations, Topics, Broker, Registry
 from utils import (
-    log_config,
+    logger_config,
     get_from_queue,
     put_to_queue,
     SinkData,
@@ -25,7 +25,9 @@ from utils import (
     status
     )
 
-_log = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.LocalStorage.alias
+_log = logger_config(logging.getLogger(alias))
 
 _DATABASE = f"{APPConfigurations.LOCAL_STORAGE_DIR}local.db"
 
@@ -279,7 +281,7 @@ def _composer(data: Any) -> str | None:
     sql = None
     if data['to_unsynced']:
 
-        if data['origin'] == 'locstorage_unsynced':
+        if data['origin'] == Registry.Modules.LocalStorage.origin_unsynced:
             sql = None
         else:
             sql = Schema.Unsynced.compose_insert(data)
@@ -372,7 +374,7 @@ async def init() -> int:
 # pushes unsynced data from sqlite to the api
 # puts the unsynced data to the taskamanger queue
 # this should be run as a coroutine and should put items into the queue in chunks
-async def push_unsynced(read_semaphore: asyncio.Semaphore,
+async def _push_unsynced(read_semaphore: asyncio.Semaphore,
                         write_lock: asyncio.Lock,
                         taskmanager_q: multiprocessing.Queue,
                         db_conn: aiosqlite.Connection,
@@ -398,44 +400,54 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
 
     proceed_fetch = True
     count = 0
+    taskid_cache = []
     with ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, {'signal': 'push_unsynced_running'})
         try:
-            while True:
+            while proceed_fetch:
 
                 rows = []
-                if proceed_fetch:
+                if not taskid_cache:
                     rows = await cursor.fetchmany(size=chunks)
 
-                if not rows and proceed_fetch:
-                    break
+                    if not rows:
+                        # break if rows is empty
+                        # TODO: implement re-query db for redundancy (?)
+                        break
 
-                else:
-                # NOTE item: [task_id, topic, origin, timestamp, payload]
+                    # NOTE item: [task_id, topic, origin, timestamp, payload]
                     for item in rows:
                         task_dict = {
                             'task_id': item[0],
                             'topic': item[1],
-                            'origin': 'locstorage_unsynced',
+                            'origin': Registry.Modules.LocalStorage.origin_unsynced,
                             'timestamp': item[3],
                             'payload': item[4]
                         }
                         await loop.run_in_executor(pool, put_to_queue, taskmanager_q, __name__, task_dict)
+                        taskid_cache.append(item[0])
 
                 # chunk done await
                 # receive the hash id of the items that are done and to be deleted
                 signal = await async_q.get()
 
-                if signal['signal'] == 'unsynced_chunk_done':
-                    proceed_fetch = True
-                    for hash_id in signal['data']['hash_ids']:
-                        sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
-                        await _executor(
-                            write_lock=write_lock,
-                            db_conn=db_conn,
-                            command=sql
-                        )
-                        count += 1
+                if signal['signal'] == Registry.Triggers.contexts.UNSYNCED_DATA:
+
+                    if signal['data']['task_id'] in taskid_cache:
+                        taskid_cache.remove(signal['data']['task_id'])
+                    else:
+                        _log.warning(f"""{alias}._push_unsynced received
+                                     {Registry.Triggers.contexts.UNSYNCED_DATA}
+                                     signal but provided task_id is not in current taskid_cache:
+                                     {signal['data']['task_id']}""")
+
+                    sql = f"DELETE FROM UnsyncedData WHERE task_id = '{signal['data']['task_id']}'"
+                    await _executor(
+                        write_lock=write_lock,
+                        db_conn=db_conn,
+                        command=sql
+                    )
+                    count += 1
 
                 elif signal['signal'] == 'abandon_task' and signal['cause'] == 'api_disconnect':
                     proceed_fetch = False
@@ -456,7 +468,7 @@ async def push_unsynced(read_semaphore: asyncio.Semaphore,
             remaining = await cursor.fetchall()
             _log.info(f"Uploaded {count} items from local storage unsynced data with {len(list(remaining))} remaining items")
             return
-        
+
         except Exception as e:
             _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}.push_unsynced(): {str(e.__cause__) if e.__cause__ else str(e)}")
 
@@ -475,14 +487,14 @@ async def _trigger_handler(
         running_ts: List[Callable]) -> Any:
 
     task = None
-    if trigger['context'] == 'api_connection_status':
+    if trigger['context'] == Registry.Triggers.contexts.API_CONNECTION_STATUS:
 
         if trigger['data']['status'] == status.CONNECTED:
-            if push_unsynced in running_ts:
+            if _push_unsynced in running_ts:
                 pass
             else:
                 _log.info(f"Connection to API restored, uploading unsynced data from local storage")
-                await push_unsynced(
+                await _push_unsynced(
                     read_semaphore=read_semaphore,
                     write_lock=write_lock,
                     taskmanager_q=taskmanager_q,
@@ -494,12 +506,14 @@ async def _trigger_handler(
         elif trigger['data']['status'] == status.DISCONNECTED:
             signal = {
                 'signal': 'abandon_task',
-                'cause': 'api_disconnect'
+                'cause': 'api_disconnect',
+                'data': {}
             }
             await push_unsynced_q.put(signal)
 
-    elif trigger['context'] == 'unsynced_chunk_done':
+    elif trigger['context'] == Registry.Triggers.contexts.UNSYNCED_DATA:
         signal = {
+            'origin': trigger['origin'],
             'signal': trigger['context'],
             'data': trigger['data']
         }
@@ -557,9 +571,9 @@ async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocess
 
                         elif data and list(data.keys()).count('signal'):
                             if data['signal'] == 'push_unsynced_running':
-                                running_ts.append(push_unsynced)
+                                running_ts.append(_push_unsynced)
                             if data['signal'] == 'push_unsynced_done':
-                                running_ts.remove(push_unsynced)
+                                running_ts.remove(_push_unsynced)
 
                         elif data:
                             task = asyncio.create_task(_executor(

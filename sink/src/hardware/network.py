@@ -9,15 +9,17 @@ import logging
 from typing import Tuple, Optional
 
 # internal
-from utils import log_config, parse_ping, parse_err_ping, status
-import settings
+from utils import logger_config, parse_ping, parse_err_ping, status
+from settings import Registry, APPConfigurations
 
-_log = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.Network.alias
+_log = logger_config(logging.getLogger(__name__))
 
 # check primary interface and see if it has an active ip address
 # returns the interface and the ip
 def _check_interface() -> Tuple[str, Optional[str]]:
-    interface = settings.APPConfigurations.PRIMARY_NET_INTERFACE
+    interface = APPConfigurations.PRIMARY_NET_INTERFACE
     ip = None
     interfaces = psutil.net_if_addrs()
     
@@ -64,8 +66,8 @@ def _ping(host, repeat=1) -> Tuple[str | None, ...]:
 def _time_out_handler(function):
     # the default timeout duration on disconnected, ideally this should be 5 minutes
     # value is configured in settings.yaml
-    maxTimeouts = settings.APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES
-    timeOut = settings.APPConfigurations.NETWORK_TIMEOUT
+    maxTimeouts = APPConfigurations.NETWORK_MAX_TIMEOUT_RETRIES
+    timeOut = APPConfigurations.NETWORK_TIMEOUT
 
     _log.warning(f'Retrying again in {timeOut} seconds. Attemps remaining: {maxTimeouts}')
     time.sleep(timeOut)
@@ -95,15 +97,15 @@ def network_check() -> int:
     
     _ping_loss_tolerance = 3 # the amount of loss (out of 5) that can be tolerated
 
-    _log.debug(f'Trying PING with gateway address: {settings.APPConfigurations.GATEWAY}')
-    sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = _ping(settings.APPConfigurations.GATEWAY)
+    _log.debug(f'Trying PING with gateway address: {APPConfigurations.GATEWAY}')
+    sent, received, packet_loss, rtt_min, rtt_avg, rtt_max, rtt_mdev, errors, time = _ping(APPConfigurations.GATEWAY)
 
     if errors:
-        _log.warning(f'Cannot establish successful ping with gateway {settings.APPConfigurations.GATEWAY}')
+        _log.warning(f'Cannot establish successful ping with gateway {APPConfigurations.GATEWAY}')
         return status.FAILED
     elif packet_loss:
         if int(packet_loss) >= (_ping_loss_tolerance * 2) * 10:
-            _log.warning(f'PING request to gateway {settings.APPConfigurations.GATEWAY} returned with packet loss higher than ping loss tolerance ({(_ping_loss_tolerance * 2) * 10}%)')
+            _log.warning(f'PING request to gateway {APPConfigurations.GATEWAY} returned with packet loss higher than ping loss tolerance ({(_ping_loss_tolerance * 2) * 10}%)')
             return status.FAILED
 
     return status.SUCCESS

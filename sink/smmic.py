@@ -19,34 +19,35 @@ from typing import Tuple, List, Callable
 # internal core modules
 import taskmanager
 from src.hardware import hardware, network
-from src.mqtt import service, client
+from src.mqtt import service, mqttclient
 from src.data import sysmonitor, locstorage, httpclient
 
 # internal helpers, configs
-from utils import log_config, Modes, status, ExceptionsHandler # priority, set_priority
-# from settings import Broker
+from utils import logger_config, Modes, status, ExceptionsHandler # priority, set_priority
+from settings import Broker, Registry
 
-_log = log_config(logging.getLogger(__name__))
+alias = Registry.Modules.Main.alias
+_log = logger_config(logging.getLogger(__name__))
 
 # abstract function to run sub processes
 # TODO: fix KeyboardInterrupt handling for graceful termination
 def run_sub_p(*args, **kwargs):
-    pretty_alias: str
-    sub_p: Callable
+    _alias: str
+    _sub_p: Callable
 
     try:
-        sub_p = kwargs.pop('sub_proc')
+        _sub_p = kwargs.pop('sub_proc')
     except KeyError:
         _log.error(f"Failed to run sub process: kwargs missing 'sub_proc' key ({__name__} at {os.getpid()})")
         raise
 
     try:
-        pretty_alias = kwargs.pop('pretty_alias')
+        _alias = kwargs.pop('alias')
     except KeyError:
         _log.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
-        pretty_alias = sub_p.__name__
-    
-    setproctitle(pretty_alias)
+        _alias = _sub_p.__name__
+
+    setproctitle(_alias)
 
     loop = None
     try:
@@ -57,11 +58,11 @@ def run_sub_p(*args, **kwargs):
     if not loop:
         return
 
-    proc_t = loop.create_task(sub_p(**kwargs))
+    proc_t = loop.create_task(_sub_p(**kwargs))
     try:
         loop.run_until_complete(proc_t)
     except KeyboardInterrupt:
-        _log.debug(f"Terminating {pretty_alias} sub process and exiting at PID {os.getpid()}")
+        _log.debug(f"Terminating {_alias} sub process and exiting at PID {os.getpid()}")
         proc_t.cancel()
 
         # cleanup
@@ -96,7 +97,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     triggers_queue = multiprocessing.Queue()
 
     task_manager_kwargs = {
-        'pretty_alias': taskmanager.alias,
+        'alias': Registry.Modules.TaskManager.alias,
         'sub_proc': taskmanager.start,
         'taskmanager_q': task_queue,
         'httpclient_q': httpclient_queue,
@@ -107,7 +108,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     }
 
     httpclient_kwargs = {
-        'pretty_alias': httpclient.alias,
+        'alias': Registry.Modules.HttpClient.alias,
         'sub_proc': httpclient.start,
         'httpclient_q': httpclient_queue,
         'taskmanager_q': task_queue,
@@ -115,7 +116,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     }
 
     hardware_kwargs = {
-        'pretty_alias': hardware.alias,
+        'alias': Registry.Modules.Hardware.alias,
         'sub_proc': hardware.start,
         'hardware_q': hardware_queue,
         'taskmanager_q': task_queue
@@ -127,7 +128,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # first, spawn and run the task manager process
         processes : List[multiprocessing.Process] = []
         for p_kwargs in kwargs_list:
-            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs, name=p_kwargs['pretty_alias']))
+            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs, name=p_kwargs['alias']))
 
         for proc in processes:
             proc.start()
@@ -141,8 +142,8 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
-        handler = client.Handler(task_queue=task_queue, sys_queue=sys_queue)
-        coroutines.append(asyncio.create_task(client.start_client(handler.msg_callback)))
+        handler = mqttclient.Handler(task_queue=task_queue, sys_queue=sys_queue)
+        coroutines.append(asyncio.create_task(mqttclient.start_client(handler.msg_callback)))
         # start the system monitor queue
         sysmonitor_args = {
             'sys_queue': sys_queue,
@@ -166,7 +167,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
             for proc in processes:
                 proc.join()
 
-            await asyncio.gather(client.shutdown_client(), *coroutines)
+            await asyncio.gather(mqttclient.shutdown_client(), *coroutines)
             raise
 
         # keep main thread alive
@@ -265,12 +266,11 @@ def sys_check() -> Tuple[int, int]:
         _log.critical('Network check returned with critical errors, cannot proceed with operation')
         core_status = status.FAILED
 
-
     return core_status, api_status
 
 if __name__ == "__main__":
 
-    multiprocessing.current_process().name = 'smmic-main'
+    multiprocessing.current_process().name = Registry.Modules.Main.alias
     if os.system('cls') != 0:
         os.system('clear')
 
