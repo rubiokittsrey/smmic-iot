@@ -275,8 +275,8 @@ class Schema:
             'payload'
         ]
 
-# sql writer
-def _composer(data: Any) -> str | None:
+# internal helper function to generate sql insert statements from the data provided
+def _sql_composer(data: Any) -> str | None:
 
     sql = None
     if data['to_unsynced']:
@@ -294,14 +294,14 @@ def _composer(data: Any) -> str | None:
 
     return sql
 
-# sql executor
-async def _executor(write_lock: asyncio.Lock, db_conn: aiosqlite.Connection, data: Any = None, command: str | None = None):
+# sql executor with retries
+async def _sql_executor(write_lock: asyncio.Lock, db_conn: aiosqlite.Connection, data: Any = None, command: str | None = None):
 
     sql = ''
     if command:
         sql = command
     elif data:
-        sql = _composer(data)
+        sql = _sql_composer(data)
 
     if not sql:
         return
@@ -403,6 +403,7 @@ async def _push_unsynced(read_semaphore: asyncio.Semaphore,
     taskid_cache = []
     with ThreadPoolExecutor() as pool:
         await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, {'signal': 'push_unsynced_running'})
+
         try:
             while proceed_fetch:
 
@@ -442,7 +443,7 @@ async def _push_unsynced(read_semaphore: asyncio.Semaphore,
                                      {signal['data']['task_id']}""")
 
                     sql = f"DELETE FROM UnsyncedData WHERE task_id = '{signal['data']['task_id']}'"
-                    await _executor(
+                    await _sql_executor(
                         write_lock=write_lock,
                         db_conn=db_conn,
                         command=sql
@@ -451,14 +452,14 @@ async def _push_unsynced(read_semaphore: asyncio.Semaphore,
 
                 elif signal['signal'] == 'abandon_task' and signal['cause'] == 'api_disconnect':
                     proceed_fetch = False
-                    for hash_id in signal['data']['hash_ids']:
-                        sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
-                        await _executor(
-                                write_lock=write_lock,
-                                db_conn=db_conn,
-                                command=sql
-                            )
-                        count += 1
+                    # for hash_id in signal['data']['hash_ids']:
+                    #     sql = f"DELETE FROM UnsyncedData WHERE task_id = '{hash_id}'"
+                    #     await _executor(
+                    #             write_lock=write_lock,
+                    #             db_conn=db_conn,
+                    #             command=sql
+                    #         )
+                    #     count += 1
                     _log.warning(f"Syncing of unsynced data to API cancelled by signal: {signal['signal']} with cause \'{signal['cause']}\'")
 
             await loop.run_in_executor(pool, put_to_queue, locstorage_q, __name__, {'signal': 'push_unsynced_done'})
@@ -473,6 +474,7 @@ async def _push_unsynced(read_semaphore: asyncio.Semaphore,
             _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}.push_unsynced(): {str(e.__cause__) if e.__cause__ else str(e)}")
 
     remaining = await cursor.fetchall()
+    await cursor.close()
     _log.info(f"Uploaded {count} items from local storage unsynced data with {len(list(remaining))} remaining items")
 
 # this modules internal trigger handler
@@ -570,13 +572,15 @@ async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocess
                             task.add_done_callback(tasks.discard)
 
                         elif data and list(data.keys()).count('signal'):
+
                             if data['signal'] == 'push_unsynced_running':
                                 running_ts.append(_push_unsynced)
+
                             if data['signal'] == 'push_unsynced_done':
                                 running_ts.remove(_push_unsynced)
 
                         elif data:
-                            task = asyncio.create_task(_executor(
+                            task = asyncio.create_task(_sql_executor(
                                 write_lock=write_lock, 
                                 db_conn=db_conn,
                                 data=data
@@ -599,6 +603,6 @@ async def start(locstorage_q: multiprocessing.Queue, taskmanager_q: multiprocess
         await asyncio.gather(*tasks, return_exceptions=True)
 
         return
-    
+
     except Exception as e:
         _log.error(f"Unhandled exception {type(e).__name__} raised at {__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")

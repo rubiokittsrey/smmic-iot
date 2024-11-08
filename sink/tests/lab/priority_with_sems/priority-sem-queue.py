@@ -3,27 +3,37 @@ from random import randint
 from datetime import datetime
 
 async def process_task(name, priority, sem: asyncio.Semaphore):
-    if sem.locked():
-        print(f'{name} awaiting semaphore acquisition')
     async with sem:
         print(f"{name} (priority {priority}) is starting.")
         await asyncio.sleep(2)
 
 async def task_consumer(queue: asyncio.PriorityQueue):
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(5)
     count = 0
-    while True:
+    tasks = set()
+
+    for _ in range(1, 16):
+
+        while sem.locked():
+            await asyncio.sleep(0.01)
+
+        # while len(tasks) == 4:
+        #    await asyncio.sleep(0.01)
+
         priority, task_name = await queue.get()
         # Process the task
         count += 1
         t_stamp = datetime.now()
-        print(f'received task from queue ({t_stamp.minute}:{t_stamp.second}.{t_stamp.microsecond}) with priority {priority}')
-        asyncio.create_task(process_task(f'task #{count}', priority, sem))
+        #print(f'received task from queue ({t_stamp.minute}:{t_stamp.second}.{t_stamp.microsecond}) with priority {priority}')
+        t = asyncio.create_task(process_task(f'task #{count}', priority, sem))
+        tasks.add(t)
+        t.add_done_callback(tasks.discard)
         queue.task_done()
 
 async def taskinflux(queue: asyncio.PriorityQueue):
-    for _ in range(0, 10):
-        p = randint(1, 3)
+
+    ps = [1, 1, 2, 1, 3, 1, 3, 3, 3, 2]
+    for p in ps:
         title = ''
         if p == 1:
             title = 'lowest'
@@ -41,9 +51,9 @@ async def main():
     taskinflux_t = asyncio.create_task(taskinflux(queue))
 
     count = 0
-    while count != 5:
+    ps = [1, 2, 2, 3, 3]
+    for p in ps:
         count += 1
-        p = randint(1, 3)
         title = ''
         if p == 1:
             title = 'lowest'

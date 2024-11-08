@@ -201,7 +201,9 @@ class Registry:
             UNSYNCED_DATA = 'unsynced_data'
 
     class Modules:
+        
         # ----- common -----
+        
         class Settings:
             alias = 'settings'
 

@@ -1,10 +1,14 @@
 """
-docs:
-this is the aiohttp session module of the entire system
-* hosts the aiohttp.ClientSession object
-* acts as the router function for different messages received from the queue to the appropriate endpoints
-* acts as the receiver for data from the api ### TODO: implement message handling to go to the 
-# TODO: documentation
+aiohttpclient module
+
+manages http communication with the api
+- hosts a single aiohttp.ClientSession object for request handling
+- routes various messages from the task to their designated api endpoints
+- integrates with internal queues (taskmanager_q and triggers_q) to handle asynchronous retries and error reporting
+
+TODOs:
+- Implement message handling for API responses to direct responses or retries.
+- Add support for priority setting based on urgency and timestamp.
 """
 
 # third-party
@@ -31,6 +35,7 @@ alias = Registry.Modules.HttpClient.alias
 
 # TODO: documentation
 # TODO: implement return request response status (i.e code, status literal, etc.)
+# routes task messages to api endpoints depending on topic
 async def _router(semaphore: asyncio.Semaphore,
                   task: Dict,
                   client_session: aiohttp.ClientSession,
@@ -101,6 +106,8 @@ async def _router(semaphore: asyncio.Semaphore,
         _r = {'task_data': task, 'status_code': status_code, 'errs': [(name, msg, cause) for name, msg, cause in errs]}
         return _r
 
+# processes unsynced data tassks from the LocalStorage module
+# callback added to tasks with origin 'locstorage_unsynced'
 async def _from_locstrg_unsynced(task: asyncio.Task, triggers_q: multiprocessing.Queue) -> bool:
     result = False
 
@@ -127,14 +134,13 @@ async def _from_locstrg_unsynced(task: asyncio.Task, triggers_q: multiprocessing
 
     return result
 
-# the task buffer in between the router and the main listening function
-# that orders the tasks by priority
+# manages the priority queue for tasks
+# buffers in between the router and the main loop
 async def _task_buffer(queue: asyncio.PriorityQueue,
-                        semaphore: asyncio.Semaphore,
-                        client_session: aiohttp.ClientSession,
-                        taskmanager_q: multiprocessing.Queue,
-                        triggers_q: multiprocessing.Queue
-                        ):
+                       semaphore: asyncio.Semaphore,
+                       client_session: aiohttp.ClientSession,
+                       taskmanager_q: multiprocessing.Queue,
+                       triggers_q: multiprocessing.Queue):
 
     # TODO: implement chunk done send trigger
     tasks: set[asyncio.Task] = set()
@@ -149,6 +155,18 @@ async def _task_buffer(queue: asyncio.PriorityQueue,
 
     try:
         while True:
+
+            # this while loop is important to keep the queue sorted
+            # and to keep items in the queue while all the semaphores are acquired
+            while len(tasks) == APPConfigurations.GLOBAL_SEMAPHORE_COUNT:
+                await asyncio.sleep(0.05)
+            # NOTE / TODO ^: because this keeps the items in the queue while tasks are executing
+            # this can be utilized to immediately re-route tasks to the task manager as failed tasks
+            # before tasks attempt calls with the api, in the event that an api disconnect trigger is
+            # raise from any of the tasks
+            # NOTE: a caveat of this strategy is that items remaining in the queue might be lost if the
+            # entire program is interrupted or shuts down
+
             priority, t_data = await queue.get()
 
             task = asyncio.create_task(_router(
@@ -171,9 +189,9 @@ async def _task_buffer(queue: asyncio.PriorityQueue,
 
 # checks api health with the /health end point
 # returns:
-# success if no problem
-# disconnected if connection cannot be established (status code == 0)
-# failed if (400 - 500, etc.)
+#       success if no problem
+#       disconnected if connection cannot be established (status code == 0)
+#       failed if (400 - 500, etc.)
 async def api_check() -> Tuple[int, Dict | None, List[Tuple[str, str, str]]]:
     chk_stat: int = status.UNVERIFIED
 
@@ -206,6 +224,7 @@ async def api_check() -> Tuple[int, Dict | None, List[Tuple[str, str, str]]]:
 
     return chk_stat, body, errs
 
+# main loop, manages the lifecycle of ClientSession and does queue retrieval
 async def start(httpclient_q: multiprocessing.Queue,
                 taskmanager_q: multiprocessing.Queue,
                 triggers_q: multiprocessing.Queue) -> None:
