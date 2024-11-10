@@ -9,26 +9,26 @@ from typing import Tuple, List, Any
 # get configurations from settings.yaml
 spath = os.path.join(os.path.dirname(__file__), '../settings.yaml')
 with open(spath, 'r') as sfile:
-    settings_yaml = yaml.safe_load(sfile)
-__app_net_configs__ = settings_yaml["app_configurations"]["network"] # the application network configurations
-__test_configs__ = settings_yaml["app_configurations"]["tests"] # testing configurations
-__dev_configs__ = settings_yaml["dev_configs"]
-__hardware_configs__ = settings_yaml["hardware_configurations"]
+    _settings_yaml = yaml.safe_load(sfile)
+_app_net_configs = _settings_yaml["app_configurations"]["network"] # the application network configurations
+_test_configs = _settings_yaml["app_configurations"]["tests"] # testing configurations
+_dev_configs = _settings_yaml["dev_configs"]
+_hardware_configs = _settings_yaml["hardware_configurations"]
 
 # load the .env variables
-envpath = os.path.join(os.path.dirname(__file__), '../.env')
-load_dotenv(envpath)
+_envpath = os.path.join(os.path.dirname(__file__), '../.env')
+load_dotenv(_envpath)
 
 # get variables from the .env file
-def __var_from_env__(key: str) -> Any:
+def _from_env(key: str) -> Any:
     var = os.getenv(key)
     if var:
         return var
 
 # global vars
 LOGGING_LEVEL = logging.DEBUG
-ENABLE_LOG_TO_FILE =  __dev_configs__["enable_log_to_file"]
-__DEV_MODE__ = False
+ENABLE_LOG_TO_FILE =  _dev_configs["enable_log_to_file"]
+_DEV_MODE = False
 
 def set_logging_level(level: int) -> None:
     global LOGGING_LEVEL
@@ -38,82 +38,109 @@ def enable_log_to_file(value: bool) -> None:
     global ENABLE_LOG_TO_FILE
     ENABLE_LOG_TO_FILE = value
 
+# FIXME: not working properly
+# NOTE: supposed to set a global variable _DEV_MODE to true in order to
+# inform the operation that it is on development mode
 def dev_mode(val: bool) -> None:
-    global __DEV_MODE__
-    __DEV_MODE__ = val
+    global _DEV_MODE
+    _DEV_MODE = val
 
 def __get_dev_mode__() -> bool:
-    return __DEV_MODE__
+    return _DEV_MODE
 DEV_MODE = __get_dev_mode__()
 
 # development configurations
 # class DevConfigs:
 
-
 # application configurations 
 class APPConfigurations:
-    GLOBAL_SEMAPHORE_COUNT : int = settings_yaml["app_configurations"]["global_semaphore_count"]
+    GLOBAL_SEMAPHORE_COUNT : int = _settings_yaml["app_configurations"]["global_semaphore_count"]
 
-    MQTT_PW : str = settings_yaml["app_configurations"]["mqtt_pwd"]
-    MQTT_USERNAME : str = settings_yaml["app_configurations"]["mqtt_username"]
+    MQTT_PW : str = _settings_yaml["app_configurations"]["mqtt_pwd"]
+    MQTT_USERNAME : str = _settings_yaml["app_configurations"]["mqtt_username"]
 
-    CLIENT_ID : str = settings_yaml["app_configurations"]["client_id"]
-    PRIMARY_NET_INTERFACE : str = __app_net_configs__["primary_interface"]
-    SRC_PATH : str = __test_configs__["src_path"]
-    GATEWAY : str = __app_net_configs__["gateway"]
-    NET_CHECK_INTERVALS = __app_net_configs__["network_check_intervals"] * 60
-    NETWORK_TIMEOUT : int = __app_net_configs__["timeout"]
-    NETWORK_MAX_TIMEOUT_RETRIES : int = __app_net_configs__["max_connection_timeouts"]
+    CLIENT_ID : str = _settings_yaml["app_configurations"]["client_id"]
+    PRIMARY_NET_INTERFACE : str = _app_net_configs["primary_interface"]
+    SRC_PATH : str = _test_configs["src_path"]
+    GATEWAY : str = _app_net_configs["gateway"]
+    NET_CHECK_INTERVALS = _app_net_configs["network_check_intervals"] * 60
+    NETWORK_TIMEOUT : int = _app_net_configs["timeout"]
+    NETWORK_MAX_TIMEOUT_RETRIES : int = _app_net_configs["max_connection_timeouts"]
+    API_DISCON_WAIT : int = _settings_yaml['app_configurations']['api_disconnect_await']
+
+    # local storage
+    LOCAL_STORAGE_DIR : str = _settings_yaml["app_configurations"]["local_storage"]["directory"]
 
     #logging
-    LOG_FILE_DIRECTORY : str = __dev_configs__["log_file_directory"]
-    LOG_FILE_NAME : str = __dev_configs__["log_file_name"]
+    LOG_FILE_DIRECTORY : str = _dev_configs["log_file_directory"]
+    LOG_FILE_NAME : str = _dev_configs["log_file_name"]
+
+    @staticmethod
+    def _disable_irr() -> bool | None:
+        val: bool | None = None
+        try:
+            val = _settings_yaml["app_configurations"]["disable_irrigation"]
+        except KeyError:
+            pass
+        return val
+
+    DISABLE_IRRIGATION: bool | None = _disable_irr()
 
 # api base url, enpoints
 class APIRoutes:
-    BASE_URL : str = __var_from_env__("API_URL")
-    TEST_URL : str = __var_from_env__("API_TEST_URL")
-    SINK_DATA : str = __var_from_env__("SINK_DATA")
-    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA")
-    HEADERS : str = settings_yaml["headers"]
+    BASE_URL : str = _from_env('API_URL')
+    TEST_URL : str = f"{BASE_URL}{_from_env('API_TEST_URL')}"
+    HEADERS : str = _settings_yaml["headers"]
+    HEALTH : str = f"{BASE_URL}{_from_env('HEALTH_CHECK_URL')}"
+
+    # sink endpoints
+    SINK_DATA : str = f"{BASE_URL}{_from_env('SINK_DATA')}"
+
+    # sensor endpoints
+    SENSOR_DATA : str = f"{BASE_URL}{_from_env('SENSOR_DATA')}"
+    SENSOR_ALERT : str = f"{BASE_URL}{_from_env('SENSOR_ALERT')}"
 
 # api configurations
 class APIConfigs:
-    SECRET_KEY : str = __var_from_env__("SECRET_KEY")
+    SECRET_KEY : str = _from_env("SECRET_KEY")
 
 # mqtt broker configuration
 class Broker:
-    HOST : str = __var_from_env__("BROKER_HOST_ADDRESS")
-    PORT : int = int(__var_from_env__("BROKER_PORT"))
-    ROOT_TOPIC : str = __var_from_env__("ROOT_TOPIC")
+    HOST : str = _from_env("BROKER_HOST_ADDRESS")
+    PORT : int = int(_from_env("BROKER_PORT"))
+    ROOT_TOPIC : str = _from_env("ROOT_TOPIC")
 
 # mqtt dev topics
 class DevTopics:
     TEST = "/dev/test"
 
 class Channels:
-    IRRIGATION = __hardware_configs__["irrigation_channel"]
+    IRRIGATION = _hardware_configs["irrigation_channel"]
 
 # mqtt functional topics
 class Topics:
-    ADMIN_SETTINGS : str = __var_from_env__("ADMIN_SETTINGS_TOPIC")
-    ADMIN_COMMANDS : str = __var_from_env__("ADMIN_COMMANDS_TOPIC")
-    SENSOR_DATA : str = __var_from_env__("SENSOR_DATA_TOPIC")
-    SENSOR_ALERT : str = __var_from_env__("SENSOR_ALERT_TOPIC")
-    SINK_DATA : str = __var_from_env__("SINK_DATA_TOPIC")
-    SINK_ALERT : str = __var_from_env__("SINK_ALERT_TOPIC")
-    SYS_BYTES_RECEIVED : str = __var_from_env__("BROKER_BYTES_RECEIVED")
-    SYS_BYTES_SENT : str = __var_from_env__("BROKER_BYTES_SENT")
-    SYS_CLIENTS_CONNECTED : str = __var_from_env__("BROKER_CLIENTS_CONNECTED")
-    SYS_CLIENTS_TOTAL : str = __var_from_env__("BROKER_CLIENTS_TOTAL")
-    SYS_MESSAGES_RECEIVED : str = __var_from_env__("BROKER_MESSAGES_RECEIVED")
-    SYS_MESSAGES_SENT : str = __var_from_env__("BROKER_MESSAGES_SENT")
-    SYS_SUB_COUNT : str = __var_from_env__("BROKER_SUBSCRIPTIONS_COUNT")
-    IRRIGATION : str = __var_from_env__("IRRIGATION_TOPIC")
-    
+    ROOT_TOPIC : str = _from_env("ROOT_TOPIC")
+    ADMIN_SETTINGS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_SETTINGS_TOPIC')}"
+    ADMIN_COMMANDS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_COMMANDS_TOPIC')}"
+    SENSOR_DATA : str = f"{ROOT_TOPIC}{_from_env('SENSOR_DATA_TOPIC')}"
+    SENSOR_ALERT : str = f"{ROOT_TOPIC}{_from_env('SENSOR_ALERT_TOPIC')}"
+    SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
+    SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
+    IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
+
+    # sys topics
+    SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
+    SYS_BYTES_SENT : str = _from_env('BROKER_BYTES_SENT')
+    SYS_CLIENTS_CONNECTED : str = _from_env('BROKER_CLIENTS_CONNECTED')
+    SYS_CLIENTS_TOTAL : str = _from_env('BROKER_CLIENTS_TOTAL')
+    SYS_MESSAGES_RECEIVED : str = _from_env('BROKER_MESSAGES_RECEIVED')
+    SYS_MESSAGES_SENT : str = _from_env('BROKER_MESSAGES_SENT')
+    SYS_SUB_COUNT : str = _from_env('BROKER_SUBSCRIPTIONS_COUNT')
+
+    @staticmethod
     def get_topics() -> Tuple[List[str], List[str]]:
-        _topics: List[str] = []
-        _sys_topics: List[str] = []
+        smmic_topics: List[str] = []
+        sys_topics: List[str] = []
 
         for key, value in vars(Topics).items():
             if not value or type(value) != str:
@@ -121,11 +148,11 @@ class Topics:
             if not key.startswith("__"):
                 topic_value = getattr(Topics, key)
                 if key.startswith("SYS"):
-                    _sys_topics.append(topic_value)
+                    sys_topics.append(topic_value)
                 else:
-                    _topics.append(topic_value)
+                    smmic_topics.append(topic_value)
 
-        return _topics, _sys_topics
+        return smmic_topics, sys_topics
                     
 
     # def data_topics() -> List[str]: # type: ignore
@@ -164,3 +191,63 @@ class Topics:
 #     _sys_topics = ["$SYS/broker/load/bytes/sent", "$SYS/broker/clients/connected"]
 
 #     return _topics, []
+
+class Registry:
+
+    class Triggers:
+
+        class contexts:
+            API_CONNECTION_STATUS = 'api_connection_status'
+            UNSYNCED_DATA = 'unsynced_data'
+
+    class Modules:
+        
+        # ----- common -----
+        
+        class Settings:
+            alias = 'settings'
+
+        class Utils:
+            alias = 'utils'
+
+        # ----- main -----
+
+        class Main:
+            alias = 'smmic'
+
+        class TaskManager:
+            alias = 'task-manager'
+
+        # ----- data -----
+
+        class LocalStorage:
+            alias = 'locstorage'
+            origin_unsynced = 'locstorage_unsynced'
+
+        class HttpClient:
+            alias = 'http-client'
+
+        class Requests:
+            alias = 'requests'
+
+        class SystemMonitor:
+            alias = 'sysmonitor'
+
+        # ----- mqtt -----
+
+        class MqttClient:
+            alias = 'mqtt-client'
+
+        class Service:
+            alias = 'service'
+        
+        # ----- hardware -----
+
+        class Hardware:
+            alias = 'hardware'
+
+        class Network:
+            alias = 'network'
+
+        class Irrigation:
+            alias = 'irrigation'

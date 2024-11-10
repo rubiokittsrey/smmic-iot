@@ -21,9 +21,9 @@ except Exception as e:
 import settings
 sys.path.append(settings.APPConfigurations.SRC_PATH)
 import requests as requests
-from utils import Modes, log_config, status
+from utils import Modes, logger_config, status
 
-__log__ = log_config(logging.getLogger(__name__))
+__log__ = logger_config(logging.getLogger(__name__))
 
 async def api_test_req(url: str, data: dict) -> Any:
     res: Any = None

@@ -8,7 +8,7 @@ from paho.mqtt import client as mqtt, enums
 from settings import Topics, Broker
 
 client = mqtt.Client(client_id="test_pub1")
-client.connect('192.168.1.25', 1883)
+client.connect(Broker.HOST, 1883)
 client.loop_start()
 
 k = 0
@@ -24,7 +24,7 @@ while True:
     payload = f"{sensor_type};{device_id};{timestamp};{data}"
     try:
         msg = client.publish(
-            topic=f"{Broker.ROOT_TOPIC}{Topics.SENSOR_DATA}",
+            topic=f"{Topics.SENSOR_DATA}",
             payload=payload,
             qos=1
         )

@@ -1,9 +1,13 @@
-import logging as __logging__
+from __future__ import annotations
+
+import logging as _logging
+import multiprocessing.queues
 import settings
 import os
 import re
 import logging
 import multiprocessing
+import queue as qlib
 from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
@@ -16,46 +20,56 @@ os.makedirs(log_directory, exist_ok=True)
 log_path = os.path.join(log_directory, log_file)
 
 # LOG VARIABLES (HANDLERS, FORMATTER)
-__LOGGER_LIST__ = []
-__LOG_FILE_HANDLER__ = __logging__.FileHandler(log_path)
-__CONSOLE_HANDLER__ = __logging__.StreamHandler()
-__LOG_FORMATTER__ = __logging__.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_LOGGER_LIST = []
+_LOG_FILE_HANDLER = _logging.FileHandler(log_path)
+_CONSOLE_HANDLER = _logging.StreamHandler()
+_LOG_FORMATTER = _logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_LOG_FORMATTER_VERBOSE = _logging.Formatter('%(asctime)s - %(levelname)s - %(message)s - %(processName)s (%(process)d) -> %(module)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 class status:
-    SUCCESS = 200
-    ERROR = 400
-    WARNING = 300
-    CRITICAL = 500
-    ACTIVE = SUCCESS
-    INACTIVE = WARNING
+    # checks
+    UNVERIFIED : int = 100
+    SUCCESS : int = 200
+    WARNING : int = 300
+    ERROR : int = 400
+    CRITICAL : int = 500
+
+    # states
+    ACTIVE : int = 250
+    INACTIVE : int = 350
+    CONNECTED : int = 1
+    DISCONNECTED : int = 0
     FAILED = ERROR
-    CONNECTED = ACTIVE
-    DISCONNECTED = INACTIVE
+
+    # task status
+    PENDING : int = 1
+    RUNNING : int = 2
+    COMPLETE : int = 3
 
 # the logging configurations
 # returns the logger object from caller with fromatter, console handler and file handler
-def log_config(logger) -> __logging__.Logger:
-    global __LOGGER_LIST__
-    __LOGGER_LIST__.append(logger)
-    logger.setLevel(__logging__.DEBUG)
+def logger_config(logger) -> _logging.Logger:
+    global _LOGGER_LIST
+    _LOGGER_LIST.append(logger)
+    logger.setLevel(_logging.DEBUG)
 
-    console_handler = __CONSOLE_HANDLER__
-    logs_handler = __LOG_FILE_HANDLER__
+    console_handler = _CONSOLE_HANDLER
+    logs_handler = _LOG_FILE_HANDLER
 
-    console_handler.setFormatter(__LOG_FORMATTER__)
-    logs_handler.setFormatter(__LOG_FORMATTER__)
+    console_handler.setFormatter(_LOG_FORMATTER_VERBOSE)
+    logs_handler.setFormatter(_LOG_FORMATTER_VERBOSE)
 
     logger.addHandler(console_handler)
     logger.addHandler(logs_handler) if settings.ENABLE_LOG_TO_FILE else None
 
     return logger
 
-__log__ = log_config(logging.getLogger(__name__))
+_logs = logger_config(logging.getLogger(__name__))
 
 def set_logging_configuration():
-    for logger in __LOGGER_LIST__:
+    for logger in _LOGGER_LIST:
         logger.setLevel(settings.LOGGING_LEVEL)
-        logger.removeHandler(__LOG_FILE_HANDLER__) if not settings.ENABLE_LOG_TO_FILE else None
+        logger.removeHandler(_LOG_FILE_HANDLER) if not settings.ENABLE_LOG_TO_FILE else None
 
 # parses and returns the packet loss, and rtt min, avg, max and mdev from a ping output
 # just for pretty ping logs, really
@@ -109,18 +123,25 @@ def parse_err_ping(output) -> Tuple[str | None, ...]:
 
 # application modes
 class Modes:
-    def dev(): #type: ignore
+    @staticmethod
+    def dev():
         settings.dev_mode(True)
         settings.set_logging_level(logging.DEBUG)
         settings.enable_log_to_file(False)
         set_logging_configuration()
-    def normal(): #type: ignore
+
+    @staticmethod
+    def normal():
         settings.set_logging_level(logging.WARNING)
         set_logging_configuration()
-    def info(): #type: ignore
+    
+    @staticmethod
+    def info():
         settings.set_logging_level(logging.INFO)
         set_logging_configuration()
-    def debug(): #type: ignore
+
+    @staticmethod
+    def debug():
         settings.set_logging_level(logging.DEBUG)
         set_logging_configuration()
 
@@ -193,11 +214,14 @@ def is_num(var) -> type[float | int] | None:
         except ValueError:
             pass
 
+    if _type is None:
+        _logs.warning(f"Failed num_check at {__name__}: {var}")
+
     return _type
 
-# maps the payload from the device reading into a dictionary
+# maps the payload from sensor devices
 # assuming that the shape of the payload (as a string) is:
-# -------
+#
 # sensor_type;
 # device_id;
 # timestamp;
@@ -206,99 +230,289 @@ def is_num(var) -> type[float | int] | None:
 # reading:value&
 # reading:value&
 # ...
-# -------
-def map_sensor_payload(payload: str) -> Dict:
-    final: Dict = {}
+#
+class SensorData:
+    def __init__(self, sensor_type, device_id, timestamp, readings, payload):
+        self.sensor_type = sensor_type
+        self.device_id = device_id
+        self.timestamp = timestamp
+        self.readings = readings
+        self.payload = payload
 
-    # parse the contents of the payload string
-    outer_split : List[str] = payload.split(";")
-    final.update({
-        'SensorType': outer_split[0],
-        'Sensor_Node': outer_split[1],
-        'timestamp': outer_split[2],
-    })
+    # soil moisture sensor type
+    class soil_moisture:
+        def __init__(self, soil_moisture, humidity, temperature, battery_level):
+            self.soil_moisture = soil_moisture
+            self.humidity = humidity
+            self.temperature = temperature
+            self.battery_level = battery_level
 
-    # parse the data from the 3rd index of the payload split
-    data : List[str] = outer_split[3].split("&")
+    @staticmethod
+    def map_sensor_payload(payload: str) -> Dict:
+        final: Dict = {}
 
-    # remove empty strings in the list
-    for i in range(data.count("")):
-        data.remove("")
+        # parse the contents of the payload string
+        outer_split : List[str] = payload.split(";")
+        final.update({
+            'sensor_type': outer_split[0],
+            'device_id': outer_split[1],
+            'timestamp': outer_split[2],
+            'payload': payload
+        })
 
-    for value in data:
-        # split the key and value of the value string
-        x = value.split(":")
-        # check the value for a valid num type (int or float)
-        _num_check = is_num(x[1])
+        # parse the data from the 3rd index of the payload split
+        data : List[str] = outer_split[3].split("&")
 
-        if not _num_check:
-            final.update({x[0]: x[1]})
-        else:
-            final.update({x[0]: _num_check(x[1])})
+        # remove empty strings in the list
+        for i in range(data.count("")):
+            data.remove("")
 
-    # if outer_split[0] == 'sensor_type':
-    #     data : List = outer_split[3].split(":")
-    #     final.update([
-    #         ('sensor_type',outer_split[0]),
-    #         ('Sensor_Node', outer_split[1]),
-    #         ('timestamp', outer_split[2]),
-    #         ('soil_moisture', data[0]),
-    #         ('humidity', data[1]),
-    #         ('temperature', data[2]),
-    #         ('battery_level', data[3]),
-    #     ])
+        for value in data:
+            # split the key and value of the value string
+            x = value.split(":")
+            # check the value for a valid num type (int or float)
+            _num_check = is_num(x[1])
 
-    return final
+            if not _num_check:
+                final.update({x[0]: x[1]})
+            else:
+                final.update({x[0]: _num_check(x[1])})
 
-# maps the payload from the sink data into a dictionary
+        # if outer_split[0] == 'sensor_type':
+        #     data : List = outer_split[3].split(":")
+        #     final.update([
+        #         ('sensor_type',outer_split[0]),
+        #         ('Sensor_Node', outer_split[1]),
+        #         ('timestamp', outer_split[2]),
+        #         ('soil_moisture', data[0]),
+        #         ('humidity', data[1]),
+        #         ('temperature', data[2]),
+        #         ('battery_level', data[3]),
+        #     ])
+
+        return final
+
+    @classmethod
+    def from_payload(cls, payload: str) -> SensorData:
+        b_map = SensorData.map_sensor_payload(payload)
+        readings = None
+
+        if b_map['sensor_type'] == 'soil_moisture':
+            readings = SensorData.soil_moisture(
+                soil_moisture=b_map['soil_moisture'],
+                humidity=b_map['humidity'],
+                temperature=b_map['temperature'],
+                battery_level=b_map['battery_level']
+            )
+            b_map.update({'readings': readings})
+        
+        f_map = {
+            'sensor_type': b_map['sensor_type'],
+            'device_id': b_map['device_id'],
+            'payload': b_map['payload'],
+            'readings': b_map['readings'],
+            'timestamp': b_map['timestamp']
+        }
+
+        _self = cls(**f_map)
+        return _self
+
+# maps the payload from the sink data
 # assuming that the shape of the payload (as a string) is:
-# ------
+#
 # device_id;
 # timestamp;
 # key:value&
 # key:value&
 # key:value&
 # key:value&
-# ..........
-# ------
-def map_sink_payload(payload: str) -> Dict:
-    final: Dict = {}
+# ...
+#
+class SinkData:
+    # connected clients, connected total, sub count
+    # bytes sent, bytes received, messages sent, messages received
+    def __init__(self,
+                 payload,
+                 timestamp,
+                 connected_clients,
+                 total_clients,
+                 sub_count,
+                 bytes_sent,
+                 bytes_received,
+                 messages_sent,
+                 messages_received,
+                 battery_level,
+                 device_id
+                 ):
+        self.device_id = device_id
+        self.payload = payload
+        self.timestamp = timestamp
+        self.connected_clients = connected_clients
+        self.total_clients = total_clients
+        self.sub_count = sub_count
+        self.bytes_sent = bytes_sent
+        self.bytes_received = bytes_received
+        self.messages_sent = messages_sent
+        self.messages_received = messages_received
+        self.battery_level = battery_level
 
-    outer_split: List[str] = payload.split(';')
-    final.update({
-        'Sink_Node': outer_split[0],
-        'timestamp': outer_split[1]
-    })
+    @staticmethod
+    def map_sink_payload(payload: str) -> Dict:
+        # keys --> (as of oct 18, 2024)
+        # raw_payload: the (unmapped) string payload
+        # Sink_Node: the sink node device id,
+        # timestamp: timestamp of the payload, not when it was received,
+        # connected_clients: currently connected clients,
+        # total_clients: disconnected and connected clients,
+        # sub_count: total subscription count of the entire mqtt network kept track by the broker,
+        # bytes_sent,
+        # bytes_received,
+        # messages_sent,
+        # messages_received,
+        # battery_level
 
-    data: List[str] = outer_split[2].split("&")
+        final: Dict = {}
 
-    # remove empty strings in the list
-    for i in range(data.count("")):
-        data.remove("")
+        outer_split: List[str] = payload.split(';')
+        final.update({
+            'device_id': outer_split[0],
+            'timestamp': outer_split[1],
+            'payload': payload
+        })
 
-    for value in data:
-        # split the key and value of the value string
-        x = value.split(":")
-        # check the value for a valid num type (int or float)
-        _num_check = is_num(x[1])
+        data: List[str] = outer_split[2].split("&")
 
-        if not _num_check:
-            final.update({x[0]: x[1]})
+        # remove empty strings in the list
+        for i in range(data.count("")):
+            data.remove("")
+
+        for value in data:
+            # split the key and value of the value string
+            x = value.split(":")
+            # check the value for a valid num type (int or float)
+            _num_check = is_num(x[1])
+
+            if not _num_check:
+                final.update({x[0]: x[1]})
+            else:
+                final.update({x[0]: _num_check(x[1])})
+
+        return final
+
+    # TODO: properly implement this function
+    @classmethod
+    def from_payload(cls, payload: str) -> SinkData:
+        b_map = SinkData.map_sink_payload(payload)
+
+        try:
+            _self = cls(**b_map)
+        except Exception as e:
+            _logs.error(f"Unhandled exception raised while creating a new SinkData object at {__name__}")
+
+        return _self
+
+class SensorAlerts:
+    # connection
+    CONNECTED = 1
+    DISCONNECTED = 0
+
+    # temperature
+    HIGH_TEMPERATURE = 30
+    NORMAL_TEMPERATURE = 31
+    LOW_TEMPERATURE = 32
+
+    # humidity
+    HIGH_HUMIDITY = 20
+    NORMAL_HUMIDITY = 21
+    LOW_HUMIDITY = 22
+
+    # soil moisture
+    HIGH_SOIL_MOISTURE = 40
+    NORMAL_SOIL_MOISTURE = 41
+    LOW_SOIL_MOISTURE = 42
+
+    # maps the payload from the 'smmic/sensor/alert' topic
+    # assuming that the shape of the payload (as a string) is:
+    # ---------
+    # device_id;
+    # timestamp;
+    # alert_code;
+    # key:value&key:value; ----> the data contained in the alert
+    # ---------
+    # the resulting dictionary:
+    # 'device_id': str
+    # 'timestamp': str
+    # 'alert_code': int
+    # 'data': dict{str: any}
+    @staticmethod
+    def map_sensor_alert(payload: str) -> Dict | None:
+        final : Dict | None = {}
+
+        outer_split: List[str] = payload.split(';')
+        final = {'device_id': outer_split[0], 'timestamp': outer_split[1]}
+
+        num_check = is_num(outer_split[2])
+
+        if not num_check:
+            _logs.warning(f"{__name__}.map_sensor_alert received alert payload with invalid alert_code: {outer_split[2]}")
+            final = None
         else:
-            final.update({x[0]: _num_check(x[1])})
+            final.update({
+                'alert_code': num_check(outer_split[2])
+            })
 
-    return final
+        if final and final['alert_code'] not in [SensorAlerts.DISCONNECTED, SensorAlerts.CONNECTED]:
+            try:
+                data_split = outer_split[3].split('&')
+                buffer = {}
+                for data in data_split:
+                    x = data.split(':')
+                    buffer.update({x[0]: x[1]})
+                final.update({'data': buffer})
+            except IndexError as e:
+                _logs.warning(f"{__name__}.map_sensor_alert raised {type(e).__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
+                final = None
+
+        return final
 
 # helper function to retrieve messages from a queue
-# run in use loop.run_in_executor() method to run in non-blocking way
-def get_from_queue(queue: multiprocessing.Queue, mod: str) -> Dict | None:
+# run using loop.run_in_executor() method to run in non-blocking way
+def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
     msg: dict | None = None
     try:
         msg = queue.get(timeout=0.1)
+    except qlib.Empty:
+        pass
     except Exception as e:
         if not queue.empty():
-            __log__.error(f"Unhandled exception raised @ PID {os.getpid()} ({mod}) while getting items from queue: {e}")
-        else:
-            pass
+            _logs.error(f"Unhandled exception {type(e).__name__} raised while getting items from queue ({name}): {str(e.__cause__) if e.__cause__ else str(e)}")
 
     return msg
+
+def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any, nowait = False) -> Tuple[int, Any]:
+    buffer = None
+    result = status.FAILED
+    try:
+        if nowait:
+            queue.put_nowait(obj=data)
+        else:
+            queue.put(obj=data)
+        result = status.SUCCESS
+    except Exception as e:
+        buffer = data
+        _logs.error(f"Unhandled exception raised while putting items to queue ({name}): {str(e)}")
+
+    return result, buffer
+
+# helper class with functions for handling common exceptions
+class ExceptionsHandler:
+
+    class event_loop:
+        
+        @staticmethod
+        def alrd_running(name: str, pid: int, err: str):
+            _logs.error(f"Loop is already running ({name} at PID {pid}): {err}")
+
+        @staticmethod
+        def unhandled(name: str, pid: int, err: str):
+            _logs.error(f"Failed to set new event loop ({name} at PID {pid}): {err}")

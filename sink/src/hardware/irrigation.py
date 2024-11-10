@@ -8,15 +8,20 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Any, Dict
 import RPi.GPIO as GPIO
+import time
 
 # internal helpers, configurations
-from utils import log_config, get_from_queue, is_num
-from settings import Channels
+from utils import logger_config, get_from_queue, is_num
+from settings import Channels, Registry
 
-__log__ = log_config(logging.getLogger(__name__))
+# settings, configurations
+alias = Registry.Modules.Irrigation.alias
+_log = logger_config(logging.getLogger(__name__))
 
-# the global irritaion queue list
-__QUEUE__ : List[str] = []
+# the global irritaion queue dictionary
+_QUEUE : List[str] = []
+# specifies how long to wait for the 'off' signal from the sensors before turning removing the id from the __QUEUE__ list
+__OFF_SIGNAL_TOLERANCE__ : float = 60
 __CHANNEL__ = Channels.IRRIGATION
 
 # helper funciton to map a payload from the 'smmic/irrigation' topic into a list
@@ -31,75 +36,110 @@ def map_irrigation_payload(payload: str) -> Dict | None:
     
     split: List[str] = payload.split(";")
     
-    _num_check = is_num(split[2])
+    num_check = is_num(split[2])
 
-    if not _num_check:
-        __log__.warning(f"{__name__}.map_irrigation_payload: 'signal' value of assumed irrigation payload is not num! ({str(type(split[2]))})")
+    if not num_check:
+        _log.warning(f"{__name__}.map_irrigation_payload: 'signal' value of assumed irrigation payload is not num! ({str(type(split[2]))})")
     else:
         final = {
             'device_id': split[0],
             'timestamp': split[1],
-            'signal': _num_check(split[2])
+            'signal': num_check(split[2])
         }
 
     return final
 
-async def __watcher__(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue) -> None:
-    global __QUEUE__
-    while True:
-        task : Dict | None = get_from_queue(queue, __name__)
+# the watcher function that retrieves items from the irrigation queue and 
+# stores the deviced id (from the item dict) into the __QUEUE__ global variable when
+# and removes the device ids on '0' signal
+# TODO: implement 'OFF' signal maximum wait tolerance
+# when an 'OFF' signal from a device is not received within a certain amount of time, close water pump
+# NOTE: consider that the delay of the 'OFF' signal maybe because it takes time to reach ideal soil moisture level
+# IDEA: use last will and testament ---> https://www.hivemq.com/blog/mqtt-essentials-part-9-last-will-and-testament/
+async def _watcher(loop: asyncio.AbstractEventLoop, queue: multiprocessing.Queue) -> None:
+    global _QUEUE
 
-        if task:
-            __log__.debug(f"{__name__}.__watcher__() at PID {os.getpid()} received task from queue")
+    # start loop
+    try:
+            while True:
+                # retrieve irrigation task from queue
+                i_task: Dict | None = get_from_queue(queue, __name__)
 
-            if task['signal'] == 1:
-                __QUEUE__.append(task['device_id']) if task['device_id'] not in __QUEUE__ else None
-                __log__.debug(f"{__name__} queue: {__QUEUE__}")
-            else:
-                __QUEUE__.remove(task['device_id'])
-                __log__.debug(f"{__name__} queue: {__QUEUE__}")
+                if i_task:
+                    keys = list(i_task.keys())
+                    device_id = i_task['device_id']
 
-        await asyncio.sleep(0.01)
+                    if 'signal' in keys:
 
-def on(pin):
+                        if i_task['signal'] == 1:
+                            if device_id in _QUEUE:
+                                _log.warning(f"{__name__}: signal 'ON' received from sensor {device_id} but task already in QUEUE")
+                            else:
+                                _QUEUE.append(device_id)
+
+                        if i_task['signal'] == 0:
+                            if device_id not in _QUEUE:
+                                _log.warning(f"{__name__}: signal 'OFF' received from sensor {device_id} but id not in QUEUE")
+                            else:
+                                _QUEUE.remove(device_id)
+
+                    if 'disconnected' in keys:
+                        if device_id in _QUEUE:
+                            _QUEUE.remove(device_id)
+                        else:
+                            pass
+
+                await asyncio.sleep(0.01)
+
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        return
+
+# turn on the input on the water pump channel
+def _on(pin):
     GPIO.output(pin, GPIO.LOW)
 
-def off(pin):
+# turn off input on the water pump channel
+# not in use
+def _off(pin):
     GPIO.output(pin, GPIO.HIGH)
 
 async def start(queue: multiprocessing.Queue) -> None:
-    global __QUEUE__
+    global _QUEUE
 
     # get event loop
     loop: asyncio.AbstractEventLoop | None = None
     try:
         loop = asyncio.get_event_loop()
     except Exception as e:
-        __log__.error(f"Failed to get event loop @ PID {os.getpid()} ({__name__} submodule co-routine): {e}")
+        _log.error(f"Failed to get event loop @ PID {os.getpid()} ({__name__} submodule co-routine): {e}")
         return
     
     if loop:
-        __log__.info(f"{__name__} submodule active @ PID {os.getpid()}")
+        _log.info(f"Coroutine {__name__.split('.')[len(__name__.split('.')) - 1]} active at PID {os.getpid()}")
 
-        asyncio.create_task(__watcher__(loop, queue))
+        asyncio.create_task(_watcher(loop, queue))
         try:
             while True:
-                if len(__QUEUE__) > 0:
+                if len(_QUEUE) > 0:
                     # GPIO setup
-                    GPIO.setmode(GPIO.BCM)
-                    GPIO.setup(__CHANNEL__, GPIO.OUT)
-                    while len(__QUEUE__) > 0:
+                    try:
+                        GPIO.setmode(GPIO.BCM)
+                        GPIO.setup(__CHANNEL__, GPIO.OUT)
+                    except Exception as e:
+                        _log.warning(f"Unhandled exception raised at {__name__} module: {e}")
+
+                    while len(_QUEUE) > 0:
                         try:
-                            on(__CHANNEL__)
+                            _on(__CHANNEL__)
                         except KeyboardInterrupt:
                             GPIO.cleanup()
                         except Exception as e:
-                            __log__.warning(f"{__name__} raised unhandled exception: {e}")
+                            _log.warning(f"{__name__.capitalize()} raised unhandled exception: {e}")
                         await asyncio.sleep(0.01)
                     GPIO.cleanup()
                 else:
                     try:
-                        off(__CHANNEL__)
+                        _off(__CHANNEL__)
                         GPIO.cleanup()
                     except Exception as e:
                         pass
@@ -108,4 +148,4 @@ async def start(queue: multiprocessing.Queue) -> None:
             GPIO.cleanup()
             raise
         except Exception as e:
-            __log__.error(f"Unhandled exception raised at {__name__} module: {e}")
+            _log.error(f"Unhandled exception raised at {__name__} module: {e}")
