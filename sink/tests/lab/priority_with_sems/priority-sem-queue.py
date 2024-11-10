@@ -1,6 +1,7 @@
 import asyncio
 from random import randint
 from datetime import datetime
+import time
 
 async def process_task(name, priority, sem: asyncio.Semaphore):
     async with sem:
@@ -12,13 +13,14 @@ async def task_consumer(queue: asyncio.PriorityQueue):
     count = 0
     tasks = set()
 
+    start = time.time()
     for _ in range(1, 16):
 
-        while sem.locked():
-            await asyncio.sleep(0.01)
+        # while sem.locked():
+        #     await asyncio.sleep(0.01)
 
-        # while len(tasks) == 4:
-        #    await asyncio.sleep(0.01)
+        while len(tasks) == 5:
+           await asyncio.sleep(0.01)
 
         priority, task_name = await queue.get()
         # Process the task
@@ -29,6 +31,9 @@ async def task_consumer(queue: asyncio.PriorityQueue):
         tasks.add(t)
         t.add_done_callback(tasks.discard)
         queue.task_done()
+    end = time.time()
+
+    print(f'buffer process time: {start - end}')
 
 async def taskinflux(queue: asyncio.PriorityQueue):
 

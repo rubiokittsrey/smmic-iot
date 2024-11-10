@@ -7,8 +7,8 @@ manages http communication with the api
 - integrates with internal queues (taskmanager_q and triggers_q) to handle asynchronous retries and error reporting
 
 TODOs:
-- Implement message handling for API responses to direct responses or retries.
-- Add support for priority setting based on urgency and timestamp.
+- implement message handling for API responses to direct responses or retries.
+- add support for priority setting based on urgency and timestamp.
 """
 
 # third-party
@@ -103,8 +103,8 @@ async def _router(semaphore: asyncio.Semaphore,
                         }
                         loop.run_in_executor(pool, put_to_queue, triggers_q, __name__, trigger)
 
-        _r = {'task_data': task, 'status_code': status_code, 'errs': [(name, msg, cause) for name, msg, cause in errs]}
-        return _r
+        t_result = {'task_data': task, 'status_code': status_code, 'errs': [(name, msg, cause) for name, msg, cause in errs]}
+        return t_result
 
 # processes unsynced data tassks from the LocalStorage module
 # callback added to tasks with origin 'locstorage_unsynced'
@@ -142,7 +142,6 @@ async def _task_buffer(queue: asyncio.PriorityQueue,
                        taskmanager_q: multiprocessing.Queue,
                        triggers_q: multiprocessing.Queue):
 
-    # TODO: implement chunk done send trigger
     tasks: set[asyncio.Task] = set()
     synced_items = []
 
@@ -228,7 +227,7 @@ async def api_check() -> Tuple[int, Dict | None, List[Tuple[str, str, str]]]:
 async def start(httpclient_q: multiprocessing.Queue,
                 taskmanager_q: multiprocessing.Queue,
                 triggers_q: multiprocessing.Queue) -> None:
-    
+
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
 
     # acquire the current running event loop
@@ -239,7 +238,7 @@ async def start(httpclient_q: multiprocessing.Queue,
     except Exception as e:
         _log.error(f"Failed to acquire event loop (exception: {type(e).__name__}): {str(e)}")
         return
-    
+
     # acquire a aiohttp.ClientSession object
     # in order to allow non-blocking http requests to execute
     client: aiohttp.ClientSession | None = None
@@ -248,7 +247,7 @@ async def start(httpclient_q: multiprocessing.Queue,
     except Exception as e:
         _log.error(f"{alias} failed to create client session object: {str(e)}")
         return
-    
+
     if loop and client:
         priority_queue = asyncio.PriorityQueue()
 
@@ -264,7 +263,7 @@ async def start(httpclient_q: multiprocessing.Queue,
             with ThreadPoolExecutor() as pool:
                 while True:
                     task = await loop.run_in_executor(pool, get_from_queue, httpclient_q, __name__)
-
+ 
                     if task:
                         priority = 0.0
                         p_multiplier = 1

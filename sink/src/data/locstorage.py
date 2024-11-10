@@ -442,13 +442,16 @@ async def _push_unsynced(read_semaphore: asyncio.Semaphore,
                                      signal but provided task_id is not in current taskid_cache:
                                      {signal['data']['task_id']}""")
 
-                    sql = f"DELETE FROM UnsyncedData WHERE task_id = '{signal['data']['task_id']}'"
-                    await _sql_executor(
-                        write_lock=write_lock,
-                        db_conn=db_conn,
-                        command=sql
-                    )
-                    count += 1
+                    if signal['data']['status_code'] == status.DISCONNECTED:
+                        pass
+                    else:
+                        sql = f"DELETE FROM UnsyncedData WHERE task_id = '{signal['data']['task_id']}'"
+                        await _sql_executor(
+                            write_lock=write_lock,
+                            db_conn=db_conn,
+                            command=sql
+                        )
+                        count += 1
 
                 elif signal['signal'] == 'abandon_task' and signal['cause'] == 'api_disconnect':
                     proceed_fetch = False

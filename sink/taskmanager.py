@@ -162,7 +162,6 @@ def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:
 # * msg_queue: the message queue that the mqtt client sends messages to. items from this queue are identified and delegated in this task manager module
 # * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
 # * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
-
 async def start(
         taskmanager_q: multiprocessing.Queue,
         httpclient_q: multiprocessing.Queue,
@@ -218,14 +217,7 @@ async def start(
                     #               {
                     #                'timestamp': datetime,
                     #                'status': int
-                    #                'errs': list[
-                    #                               {
-                    #                                   'err_name': name,
-                    #                                   'err_msg': msg,
-                    #                                   'err_cause': cause
-                    #                               },
-                    #                               ...
-                    #                            ]
+                    #                'errs': [(errname, errmsg, errcause), (...), ...]
                     #               }
                     #   }
                     #   'context' == (the context behind hte trigger, or the cause / source)
