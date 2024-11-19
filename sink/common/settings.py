@@ -86,6 +86,16 @@ class APPConfigurations:
 
     DISABLE_IRRIGATION: bool | None = _disable_irr()
 
+    # pysher configurations
+    PUSHER_APP_ID : str = _settings_yaml["app_configurations"]["pusher"]["app_id"]
+    PUSHER_KEY : str = _settings_yaml["app_configurations"]["pusher"]["key"]
+    PUSHER_SECRET : str = _settings_yaml["app_configurations"]["pusher"]["secret"]
+    PUSHER_CLUSTER : str = _settings_yaml["app_configurations"]["pusher"]["cluster"]
+    PUSHER_SSL : bool = _settings_yaml["app_configurations"]["pusher"]["ssl"]
+    PUSHER_CHANNELS : List[str] = _settings_yaml["app_configurations"]["pusher"]["channels"]
+    PUSHER_EVENT_IRR : str = _from_env('PUSHER_EVENT_IRRIGATION')
+    PUSHER_EVENT_INT : str = _from_env('PUSHER_EVENT_INTERVAL')
+
 # api base url, enpoints
 class APIRoutes:
     BASE_URL : str = _from_env('API_URL')
@@ -127,6 +137,10 @@ class Topics:
     SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
     SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
     IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
+
+    # command / trigger topics
+    SE_DATA_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_DATA_TRIGGER')}"
+    SE_IRRIGATION_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_IRRIGATION_TRIGGER')}"
 
     # sys topics
     SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
@@ -199,6 +213,10 @@ class Registry:
         class contexts:
             API_CONNECTION_STATUS = 'api_connection_status'
             UNSYNCED_DATA = 'unsynced_data'
+            
+            # commands
+            SENSOR_DATA = "se_data"
+            SENSOR_IRRIGATION = "se_irrigation"
 
     class Modules:
         
@@ -233,6 +251,9 @@ class Registry:
         class SystemMonitor:
             alias = 'sysmonitor'
 
+        class PysherClient:
+            alias = 'pysher-client'
+
         # ----- mqtt -----
 
         class MqttClient:
@@ -240,6 +261,9 @@ class Registry:
 
         class Service:
             alias = 'service'
+
+        class telemetrymanager:
+            alais = 'telemetry-manager'
         
         # ----- hardware -----
 

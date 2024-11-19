@@ -268,7 +268,6 @@ async def start(httpclient_q: multiprocessing.Queue,
                         priority = 0.0
                         p_multiplier = 1
 
-                        # TODO: implement priority setting
                         task['timestamp']
                         parsed_dt = datetime.strptime(task['timestamp'], "%Y-%m-%d %H:%M:%S.%f")
                         unix_t = parsed_dt.timestamp()
