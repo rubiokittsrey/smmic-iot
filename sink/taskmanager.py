@@ -267,7 +267,7 @@ async def start(
                                 'origin': alias
                             })
 
-                        _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())
+                        _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data}".capitalize())
 
                         task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)) # pass api status flag to delegator
                         tasks.add(task)

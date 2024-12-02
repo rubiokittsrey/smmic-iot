@@ -4,13 +4,14 @@ import time
 import logging
 import os
 import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
 from typing import Any
 from datetime import datetime
 
 # internal
 from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE, Registry
-from utils import logger_config, status, priority, set_priority
+from utils import logger_config, status, get_from_queue
 
 # settings, configurations
 alias = Registry.Modules.MqttClient.alias
@@ -141,11 +142,19 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
 # starts the client
 # optional message callback functions can be added
 # each function returns a tuple of str (the task title) and a bool (the result of the task)
-async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
+async def start_client(
+        msg_handler: paho_mqtt.CallbackOnMessage,
+        mqttclient_q: multiprocessing.Queue) -> None:
     _client = _init_client()
 
     if not _client:
         return
+    
+    # loop = None
+    # try:
+    #     loop = asyncio.get_running_loop()
+    # except Exception as e:
+    #     _log.error(f'Failed to acquire running event loop: {str(e.__cause__) if (e.__cause__) else str(e)}')
     
     # set username and password (if exists)
     _pw = APPConfigurations.MQTT_PW
@@ -160,11 +169,20 @@ async def start_client(_msg_handler: paho_mqtt.CallbackOnMessage) -> None:
     _client.on_subscribe = _on_sub
     #_client.on_connect_fail = __on_connect_fail__ #TODO fix on connect not executing (?)
 
-    con = await _connect_loop(_client, _msg_handler)
+    con = await _connect_loop(_client, msg_handler)
     if con:
         _log.info(f"Callback client running and connected at PID: {os.getpid()}")
 
     # keep this client thread alive
+    # with ThreadPoolExecutor() as pool:
+    #     while True:
+    #         data = loop.run_in_executor(pool, get_from_queue, mqttclient_q, __name__)
+
+    #         if data:
+    #             data['context']
+
+    #         await asyncio.sleep(0.5)
+
     while True:
         await asyncio.sleep(0.5)
 

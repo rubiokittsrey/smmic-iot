@@ -95,6 +95,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
     triggers_queue = multiprocessing.Queue()
+    mqttclient_queue = multiprocessing.Queue()
 
     task_manager_kwargs = {
         'alias': Registry.Modules.TaskManager.alias,
@@ -143,7 +144,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # then create and run the callback_client task
         # pass the callback method of the handler object
         handler = mqttclient.Handler(task_queue=task_queue, sys_queue=sys_queue)
-        coroutines.append(asyncio.create_task(mqttclient.start_client(handler.msg_callback)))
+        coroutines.append(asyncio.create_task(mqttclient.start_client(msg_handler=handler.msg_callback, mqttclient_q=mqttclient_queue)))
         # start the system monitor queue
         sysmonitor_args = {
             'sys_queue': sys_queue,
