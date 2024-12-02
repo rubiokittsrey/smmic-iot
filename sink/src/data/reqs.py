@@ -58,7 +58,7 @@ def _req_decorator(func: Callable) -> Any:
 
                 # logging logic
                 err_logs.append(f"Exception {type(e).__name__} raised at {__name__}.{func.__name__}: {str(err_msg) if err_msg else str(e)}")
-                errs.append((type(e).__name__, str(e), f'{str(err_msg) if err_msg else ''}'))
+                errs.append((type(e).__name__, str(e), f"{str(err_msg) if err_msg else ''}"))
 
                 if type(e) == aiohttp.ClientResponseError:
                     break

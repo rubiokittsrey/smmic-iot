@@ -19,15 +19,17 @@ alias = Registry.Modules.PysherClient.alias
 
 _pysher_client = pysher.Pusher(
     key=APPConfigurations.PUSHER_KEY,
-    cluster=APPConfigurations.PUSHER_CLUSTER
+    cluster=APPConfigurations.PUSHER_CLUSTER,
+    secret=APPConfigurations.PUSHER_SECRET,
+    secure=APPConfigurations.PUSHER_SSL
     )
 
 def _interval_event_handler(data: Any):
-    print(data)
+    _log.debug(f'PysherClient received interval trigger event: {data}')
     pass
 
 def _irrigation_event_handler(data: Any):
-    print(data)
+    _log.debug(f'PysherClient received irrigation trigger event: {data}')
     pass
 
 # when connected, subscribe to channel

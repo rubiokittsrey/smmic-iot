@@ -8,6 +8,7 @@ import re
 import logging
 import multiprocessing
 import queue as qlib
+from datetime import datetime
 from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
@@ -262,6 +263,11 @@ class SensorData:
 
         # parse the data from the 3rd index of the payload split
         data : List[str] = outer_split[3].split("&")
+        
+        from_epoch_check = is_num(final['timestamp']) 
+        if from_epoch_check:
+            formatted_time : datetime = datetime.fromtimestamp(from_epoch_check(final['timestamp']));
+            final['timestamp'] = str(formatted_time);
 
         # remove empty strings in the list
         for i in range(data.count("")):
@@ -451,6 +457,16 @@ class SensorAlerts:
         outer_split: List[str] = payload.split(';')
         final = {'device_id': outer_split[0], 'timestamp': outer_split[1]}
 
+        # from_epoch_check = is_num(final['timestamp'])
+        # if from_epoch_check:
+        #     formatted_time : datetime = datetime.fromtimestamp(from_epoch_check(final['timestamp']))
+        #     final['timestamp'] = str(formatted_time);
+
+        final['timestamp'] = str(datetime.now())
+        
+        # NOTE: temporary fix!
+        final['sensor_type'] = 'soil_moisture'
+        
         num_check = is_num(outer_split[2])
 
         if not num_check:
@@ -472,6 +488,8 @@ class SensorAlerts:
             except IndexError as e:
                 _logs.warning(f"{__name__}.map_sensor_alert raised {type(e).__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
                 final = None
+        else:
+            final.update({'data': {}})
 
         return final
 

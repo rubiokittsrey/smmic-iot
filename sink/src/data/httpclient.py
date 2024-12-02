@@ -64,6 +64,8 @@ async def _router(semaphore: asyncio.Semaphore,
             req_body = SensorAlerts.map_sensor_alert(task['payload'])
             status_code, res_body, errs = await reqs.post_req(session=client_session, url=APIRoutes.SENSOR_ALERT, data=req_body)
 
+        # _log.debug(req_body)
+
         if status_code == status.SUCCESS:
             pass
 

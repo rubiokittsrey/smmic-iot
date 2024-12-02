@@ -21,7 +21,7 @@ from utils import (logger_config,
                    SensorAlerts,
                    status)
 from settings import APPConfigurations, Topics, Registry
-from src.data import sysmonitor, locstorage, httpclient
+from src.data import sysmonitor, locstorage, httpclient, pysherclient
 
 # configurations, settings
 _log = logger_config(logging.getLogger(__name__))
@@ -199,6 +199,8 @@ async def start(
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
             aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q, httpclient_q))
+            # TODO: pass queues
+            pysherclient_t = asyncio.create_task(pysherclient.start())
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
@@ -279,6 +281,6 @@ async def start(
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-            loop.run_until_complete(aiosqlitedb_t)
+            loop.run_until_complete(aiosqlitedb_t, pysherclient_t)
 
             return
