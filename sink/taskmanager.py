@@ -200,7 +200,7 @@ async def start(
         try:
             aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q, httpclient_q))
             # TODO: pass queues
-            pysherclient_t = asyncio.create_task(pysherclient.start())
+            pysherclient_t = asyncio.create_task(pysherclient.start(taskmanager_q, triggers_q))
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
@@ -281,6 +281,6 @@ async def start(
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-            loop.run_until_complete(aiosqlitedb_t, pysherclient_t)
+            loop.run_until_complete(*[aiosqlitedb_t, pysherclient_t])
 
             return

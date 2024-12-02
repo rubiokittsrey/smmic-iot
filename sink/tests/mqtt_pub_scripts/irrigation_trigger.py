@@ -1,7 +1,7 @@
 from paho.mqtt import client as mqtt, enums
 
 from settings import Topics, Broker
-
+    
 client = mqtt.Client(client_id="irrigation_test")
 client.connect(Broker.HOST, Broker.PORT)
 client.loop_start()

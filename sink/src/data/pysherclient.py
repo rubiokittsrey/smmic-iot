@@ -46,8 +46,8 @@ def _connect_handler(
     return ch
 
 async def start(
-        # taskamanager_q: multiprocessing.Queue,
-        # triggers_q: multiprocessing.Queue,
+        taskamanager_q: multiprocessing.Queue,
+        triggers_q: multiprocessing.Queue,
         ) -> None:
 
     # acquire asyncio abstract event loop
@@ -76,6 +76,3 @@ async def start(
     
     except Exception as e:
         _log.error(f"Unhandled exception rasied: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(start());

@@ -6,7 +6,7 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
-from typing import Any
+from typing import Any, Dict
 from datetime import datetime
 
 # internal
@@ -139,22 +139,59 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
         if _CLIENT_STAT == status.SUCCESS:
             break
 
+# NOTE: temporary, this is better with async mqtt libraries
+# shape of data expected: device_id;signal (0 / 1);timestamp;
+def _irrigation_trigger(data: Dict) -> Any:
+    if not _CALLBACK_CLIENT:
+        _log.warning(f'Callback client of MQTTClient moule is not initialized')
+        return
+
+    try:
+        msg = _CALLBACK_CLIENT.publish(
+            topic=f'{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}',
+            payload=data['signal'],
+            qos=1
+        )
+        if msg.is_published():
+            _log.debug(f'Published sensor irrigation trigger: {data}')
+    except Exception as e:
+        _log.error(f'Unable to publish sensor irrigation trigger: {str(e.__cause__) if (e.__cause__) else str(e)}')
+
+# shape of data expected: device_id;seconds;timestamp
+def _interval_trigger(data: Dict) -> Any:
+    if not _CALLBACK_CLIENT:
+        _log.warning(f'Callback client of MQTTClient module not initialized')
+        return
+
+    try:
+        msg = _CALLBACK_CLIENT.publish(
+            topic=f'{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}',
+            payload=data['seconds'],
+            qos=1
+        )
+        if msg.is_published():
+            _log.debug(f'Published sensor interval trigger: {data}')
+    except Exception as e:
+        _log.error(f'Unable to publish sensor interval trigger: {str(e.__cause__) if (e.__cause__) else str(e)}')
+
 # starts the client
 # optional message callback functions can be added
 # each function returns a tuple of str (the task title) and a bool (the result of the task)
 async def start_client(
         msg_handler: paho_mqtt.CallbackOnMessage,
         mqttclient_q: multiprocessing.Queue) -> None:
+    
     _client = _init_client()
 
     if not _client:
         return
     
-    # loop = None
-    # try:
-    #     loop = asyncio.get_running_loop()
-    # except Exception as e:
-    #     _log.error(f'Failed to acquire running event loop: {str(e.__cause__) if (e.__cause__) else str(e)}')
+    loop = None
+    try:
+        loop = asyncio.get_running_loop()
+    except Exception as e:
+        _log.error(f"Failed to acquire running event loop: {str(e.__cause__) if (e.__cause__) else str(e)}")
+        return
     
     # set username and password (if exists)
     _pw = APPConfigurations.MQTT_PW
@@ -183,8 +220,19 @@ async def start_client(
 
     #         await asyncio.sleep(0.5)
 
-    while True:
-        await asyncio.sleep(0.5)
+    with ThreadPoolExecutor() as pool:
+        while True:
+            data = await loop.run_in_executor(pool, get_from_queue, mqttclient_q, __name__)
+            
+            if data and list(data.keys()).count('trigger'):
+
+                if data['context'] == Registry.Triggers.contexts.SE_IRRIGATION_OVERRIDE:
+                    asyncio.create_task(_irrigation_trigger(data))
+
+                elif data['context'] == Registry.Triggers.contexts.SE_INTERVAL:
+                    asyncio.create_task(_interval_trigger(data))
+
+            await asyncio.sleep(0.05)
 
 def get_client() -> paho_mqtt.Client | None:
     if _CALLBACK_CLIENT:

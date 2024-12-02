@@ -472,6 +472,7 @@ class SensorAlerts:
         if not num_check:
             _logs.warning(f"{__name__}.map_sensor_alert received alert payload with invalid alert_code: {outer_split[2]}")
             final = None
+            return
         else:
             final.update({
                 'alert_code': num_check(outer_split[2])

@@ -139,7 +139,7 @@ class Topics:
     IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
 
     # command / trigger topics
-    SE_DATA_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_DATA_TRIGGER')}"
+    SE_INTERVAL_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_INTERVAL_TRIGGER')}"
     SE_IRRIGATION_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_IRRIGATION_TRIGGER')}"
 
     # sys topics
@@ -215,8 +215,8 @@ class Registry:
             UNSYNCED_DATA = 'unsynced_data'
             
             # commands
-            SENSOR_DATA = "se_data"
-            SENSOR_IRRIGATION = "se_irrigation"
+            SE_INTERVAL = "se_interval"
+            SE_IRRIGATION_OVERRIDE = "se_irrigation_override"
 
     class Modules:
         
