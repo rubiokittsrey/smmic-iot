@@ -9,3 +9,4 @@ sink/common/logs/smmic.log
 *.db-shm
 *.db-wal
 *.bak.log
+*.log.bak

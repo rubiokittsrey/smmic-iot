@@ -282,7 +282,10 @@ class SensorData:
             if not _num_check:
                 final.update({x[0]: x[1]})
             else:
-                final.update({x[0]: _num_check(x[1])})
+                final_num : int = _num_check(x[1])
+                if final_num > 100:
+                    final_num = 99
+                final.update({x[0]: final_num})
 
         # if outer_split[0] == 'sensor_type':
         #     data : List = outer_split[3].split(":")

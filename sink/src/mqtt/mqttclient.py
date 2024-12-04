@@ -148,7 +148,7 @@ def _irrigation_trigger(data: Dict) -> Any:
 
     try:
         msg = _CALLBACK_CLIENT.publish(
-            topic=f'{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}',
+            topic=f"{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}",
             payload=data['signal'],
             qos=1
         )
@@ -165,7 +165,7 @@ def _interval_trigger(data: Dict) -> Any:
 
     try:
         msg = _CALLBACK_CLIENT.publish(
-            topic=f'{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}',
+            topic=f"{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}",
             payload=data['seconds'],
             qos=1
         )
