@@ -296,7 +296,13 @@ class Handler:
         # --->
         topic = message.topic
         timestamp = str(datetime.now())
-        payload = str(message.payload.decode('utf-8'))
+        payload : str = ''
+        
+        try:
+            payload = str(message.payload.decode('utf-8'))
+        except UnicodeDecodeError as e:
+            _log.warning(f'{__name__} failed to decode payload from topic {message.payload}: {message.payload}')
+
         try:
             if topic.startswith("$SYS"):
                 self._sys_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})

@@ -137,10 +137,7 @@ class Topics:
     SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
     SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
     IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
-
-    # command / trigger topics
-    SE_INTERVAL_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_INTERVAL_TRIGGER')}"
-    SE_IRRIGATION_TRIGGER : str = f"{ROOT_TOPIC}{_from_env('SENSOR_IRRIGATION_TRIGGER')}"
+    U_COMMANDS_FEEDBACK : str = f"{ROOT_TOPIC}{_from_env('USER_COMMANDS_FEEDBACK')}"
 
     # sys topics
     SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
@@ -180,6 +177,11 @@ class Topics:
     #             if key.count("DATA") > 0 or key.count()
 
     #     return _topics, _sys_topics
+
+class PubTopics:
+    # command / trigger topics
+    SE_INTERVAL_TRIGGER : str = f"{Topics.ROOT_TOPIC}{_from_env('SENSOR_INTERVAL_TRIGGER')}"
+    SE_IRRIGATION_TRIGGER : str = f"{Topics.ROOT_TOPIC}{_from_env('SENSOR_IRRIGATION_TRIGGER')}"
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics

@@ -6,11 +6,11 @@ client = mqtt.Client(client_id="irrigation_test")
 client.connect(Broker.HOST, Broker.PORT)
 client.loop_start()
 
-payload = '1'
+payload = '300'
 try:
     msg = client.publish(
         # 'smmic/sensor/triggers/interval'
-        topic=f'smmic/sensor/triggers/irrigation/58c6dd67-3200-4bf0-8044-a851465edd02',
+        topic=f'smmic/sensor/triggers/interval/58c6dd67-3200-4bf0-8044-a851465edd02',
         payload=payload,
         qos=1
         )
