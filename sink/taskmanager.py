@@ -12,16 +12,38 @@ import random
 import heapq
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Any, Dict, List, Tuple, Set
+from typing import (
+    Callable,
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Set
+)
 
 # internal helpers, configs
-from utils import (logger_config,
-                   set_priority, priority,
-                   get_from_queue, put_to_queue,
-                   SensorAlerts,
-                   status)
-from settings import APPConfigurations, Topics, Registry
-from src.data import sysmonitor, locstorage, httpclient, pysherclient
+from utils import (
+    logger_config,
+    set_priority,
+    priority,
+    get_from_queue,
+    put_to_queue,
+    SensorAlerts,
+    status
+)
+
+from settings import (
+    APPConfigurations,
+    Topics,
+    Registry
+)
+
+from src.data import (
+    sysmonitor,
+    locstorage,
+    httpclient,
+    pysherclient
+)
 
 # configurations, settings
 _log = logger_config(logging.getLogger(__name__))
@@ -62,13 +84,28 @@ async def _delegator(semaphore: asyncio.Semaphore,
                      ) -> Any:
 
     # topics that need to be handled by the aiohttp client (http requests, api calls)
-    aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT, Topics.SINK_ALERT]
+    aiohttp_queue_topics = [
+        Topics.SENSOR_DATA,
+        Topics.SINK_DATA,
+        Topics.SENSOR_ALERT,
+        Topics.SINK_ALERT
+    ]
+
     # topics that need to be handled by the hardware module
-    hardware_queue_topics = [Topics.IRRIGATION] # TODO: implement this
+    hardware_queue_topics = [
+        Topics.IRRIGATION
+    ] # TODO: implement this
+    
     # topics handled by aiosqlitedb module
-    aiosqlite_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA]
+    aiosqlite_queue_topics = [
+        Topics.SENSOR_DATA,
+        Topics.SINK_DATA
+    ]
+
     # test topics
-    test_topics = ['/dev/test']
+    test_topics = [
+        '/dev/test'
+    ]
 
     async with semaphore:
         dest: List[Tuple[multiprocessing.Queue, Any]] = []

@@ -10,7 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 import pysher.channel
 
 # internal helpers, configs
-from settings import APPConfigurations, Topics, Registry
+from settings import (
+    APPConfigurations,
+    Registry,
+    Topics
+)
 from utils import logger_config
 
 # settings, configs
@@ -22,7 +26,7 @@ _pysher_client = pysher.Pusher(
     cluster=APPConfigurations.PUSHER_CLUSTER,
     secret=APPConfigurations.PUSHER_SECRET,
     secure=APPConfigurations.PUSHER_SSL
-    )
+)
 
 def _interval_event_handler(data: Any):
     _log.debug(f'PysherClient received interval trigger event: {data}')
@@ -40,8 +44,14 @@ def _connect_handler(
     for c in APPConfigurations.PUSHER_CHANNELS:
        ch : pysher.channel.Channel = _pysher_client.subscribe(c)
 
-    ch.bind(APPConfigurations.PUSHER_EVENT_INT, _interval_event_handler)
-    ch.bind(APPConfigurations.PUSHER_EVENT_IRR, _irrigation_event_handler)
+    ch.bind(
+        APPConfigurations.PUSHER_EVENT_INT,
+        _interval_event_handler
+    )
+    ch.bind(
+        APPConfigurations.PUSHER_EVENT_IRR,
+        _irrigation_event_handler
+    )
 
     return ch
 
@@ -60,7 +70,10 @@ async def start(
 
     # create pusher client obj
     # connect client
-    _pysher_client.connection.bind('pusher:connection_established', _connect_handler)
+    _pysher_client.connection.bind(
+        'pusher:connection_established',
+        _connect_handler
+    )
     _pysher_client.connect()
 
     _log.info(f"{alias} client connected and active".capitalize())

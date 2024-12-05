@@ -89,10 +89,30 @@ class APPConfigurations:
     # pysher configurations
     PUSHER_APP_ID : str = _settings_yaml["app_configurations"]["pusher"]["app_id"]
     PUSHER_KEY : str = _settings_yaml["app_configurations"]["pusher"]["key"]
-    PUSHER_SECRET : str = _settings_yaml["app_configurations"]["pusher"]["secret"]
-    PUSHER_CLUSTER : str = _settings_yaml["app_configurations"]["pusher"]["cluster"]
-    PUSHER_SSL : bool = _settings_yaml["app_configurations"]["pusher"]["ssl"]
-    PUSHER_CHANNELS : List[str] = _settings_yaml["app_configurations"]["pusher"]["channels"]
+    PUSHER_SECRET : str = (
+        _settings_yaml
+        ["app_configurations"]
+        ["pusher"]
+        ["secret"]
+    )
+    PUSHER_CLUSTER : str = (
+        _settings_yaml
+        ["app_configurations"]
+        ["pusher"]
+        ["cluster"]
+    )
+    PUSHER_SSL : bool = (
+        _settings_yaml
+        ["app_configurations"]
+        ["pusher"]
+        ["ssl"]
+    )
+    PUSHER_CHANNELS : List[str] = (
+        _settings_yaml
+        ["app_configurations"]
+        ["pusher"]
+        ["channels"]
+    )
     PUSHER_EVENT_IRR : str = _from_env('PUSHER_EVENT_IRRIGATION')
     PUSHER_EVENT_INT : str = _from_env('PUSHER_EVENT_INTERVAL')
 
