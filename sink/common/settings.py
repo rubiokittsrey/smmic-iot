@@ -134,33 +134,35 @@ class APPConfigurations:
     )
     PUSHER_SECRET : str = (
         _settings_yaml
-        ["app_configurations"]
-        ["pusher"]
-        ["secret"]
+            ["app_configurations"]
+            ["pusher"]
+            ["secret"]
     )
     PUSHER_CLUSTER : str = (
         _settings_yaml
-        ["app_configurations"]
-        ["pusher"]
-        ["cluster"]
+            ["app_configurations"]
+            ["pusher"]
+            ["cluster"]
     )
     PUSHER_SSL : bool = (
         _settings_yaml
-        ["app_configurations"]
-        ["pusher"]
-        ["ssl"]
+            ["app_configurations"]
+            ["pusher"]
+            ["ssl"]
     )
     PUSHER_CHANNELS : List[str] = (
         _settings_yaml
-        ["app_configurations"]
-        ["pusher"]
-        ["channels"]
+            ["app_configurations"]
+            ["pusher"]
+            ["channels"]
     )
 
     # events
     PUSHER_EVENT_IRR : str = _from_env('PUSHER_EVENT_IRRIGATION')
     PUSHER_EVENT_INT : str = _from_env('PUSHER_EVENT_INTERVAL')
     PUSHER_EVENT_FEEDBACK : str = _from_env('PUSHER_EVENT_FEEDBACK')
+
+    REGISTERED_SENSORS : List[str] = _settings_yaml["registered_sensors"]
 
 # api base url, enpoints
 class APIRoutes:

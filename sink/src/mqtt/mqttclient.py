@@ -213,7 +213,7 @@ async def _irrigation_trigger(
 
     try:
         msg = client.publish(
-            topic=f"{PubTopics.SE_INTERVAL_TRIGGER}{data['device_id']}",
+            topic=f"{PubTopics.SE_IRRIGATION_TRIGGER}{data['device_id']}",
             payload=data['command'],
             qos=1
         )
@@ -242,7 +242,7 @@ async def _interval_trigger(
         msg.wait_for_publish()
         if msg.is_published():
             _log.debug(f'Published sensor interval trigger: {data}')
-            
+
     except Exception as e:
         _log.error(
             f"Unable to publish sensor interval trigger: "

@@ -23,7 +23,8 @@ from settings import (
 from utils import (
     logger_config,
     get_from_queue,
-    put_to_queue
+    put_to_queue,
+    is_num
 )
 
 # settings, configs
@@ -68,6 +69,9 @@ def _interval_event_handler(
     if not command_data:
         return
     
+    if command_data['device_id'] not in APPConfigurations.REGISTERED_SENSORS:
+        return
+
     trigger = {
         'origin': alias,
         'context': Registry.Triggers.contexts.SE_INTERVAL,
@@ -104,6 +108,9 @@ def _irrigation_event_handler(
         )
 
     if not command_data:
+        return
+    
+    if command_data['device_id'] not in APPConfigurations.REGISTERED_SENSORS:
         return
 
     trigger = {
@@ -153,25 +160,48 @@ def _connect_handler(
     return ch
 
 async def _trigger(data: dict[str, Any]):
-    unmapped_data = data['payload']
-    split = unmapped_data.split(';')
+    f_data = {}
 
-    if len(split) < 2:
-        _log.warning(
-            f"{alias.capitalize()} received data "
-            f"but lenght after split < 2, cancelling this task")
-        return
+    if data['topic'] == Topics.IRRIGATION:
+        unmapped_data = data['payload']
+        split = unmapped_data.split(';')
 
-    f_data = {
-        'device_id': split[0],
-        'command': split[1],
-        'timestamp': str(datetime.now())
-    }
+        if len(split) < 2:
+            _log.warning(
+                f"{alias.capitalize()} received data "
+                f"but lenght after split < 2, cancelling this task")
+            return
+        
+        f_data['device_id'] = split[0]
 
-    if 'irrigation' in split[2].split('/'):
+        f_data['timestamp'] = str(datetime.now())
+        # TODO: datetime from unix timestamp, too lazy for that rn
+        # numcheck = is_num(split[1])
+        # if (numcheck):
+        #     f_data['timestamp'] = datetime
+
+        f_data['command'] = split[2]
         f_data['context'] = 'irrigation'
-    elif 'interval' in split[2].split('/'):
-        f_data['context'] = 'interval'
+    
+    elif data['topic'] == Topics.COMMANDS_FEEDBACK:
+        unmapped_data = data['payload']
+        split = unmapped_data.split(';')
+
+        if len(split) < 2:
+            _log.warning(
+                f"{alias.capitalize()} received data "
+                f"but lenght after split < 2, cancelling this task")
+            return
+
+        f_data['device_id'] = split[0]
+        f_data['command'] = split[1]
+        f_data['timestamp'] = str(datetime.now())
+
+        if 'irrigation' in split[2].split('/'):
+            return
+            # f_data['context'] = 'irrigation'
+        elif 'interval' in split[2].split('/'):
+            f_data['context'] = 'interval'
 
     _pusher_client.trigger(
         channels = APPConfigurations.PUSHER_CHANNELS[0],
@@ -180,7 +210,6 @@ async def _trigger(data: dict[str, Any]):
     )
 
     _log.debug(f'{alias.capitalize()} trigger sent: {data}')
-    pass
 
 async def start(
         taskmanager_q: multiprocessing.Queue,
