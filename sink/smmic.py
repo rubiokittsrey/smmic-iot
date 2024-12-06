@@ -20,11 +20,24 @@ from typing import Tuple, List, Callable
 import taskmanager
 from src.hardware import hardware, network
 from src.mqtt import service, mqttclient
-from src.data import sysmonitor, locstorage, httpclient
+from src.data import (
+    sysmonitor,
+    locstorage,
+    httpclient
+)
 
 # internal helpers, configs
-from utils import logger_config, Modes, status, ExceptionsHandler # priority, set_priority
-from settings import Broker, Registry
+from utils import (
+    logger_config,
+    Modes,
+    status,
+    ExceptionsHandler
+) # priority, set_priority
+
+from settings import (
+    Broker,
+    Registry
+)
 
 alias = Registry.Modules.Main.alias
 _log = logger_config(logging.getLogger(__name__))
@@ -38,13 +51,16 @@ def run_sub_p(*args, **kwargs):
     try:
         _sub_p = kwargs.pop('sub_proc')
     except KeyError:
-        _log.error(f"Failed to run sub process: kwargs missing 'sub_proc' key ({__name__} at {os.getpid()})")
+        _log.error(
+            f"Failed to run sub process:"
+            f"kwargs missing 'sub_proc' key"
+        )
         raise
 
     try:
         _alias = kwargs.pop('alias')
     except KeyError:
-        _log.warning(f"Kwargs missing 'pretty_alias' key ({__name__}) at {os.getpid()}")
+        _log.warning("Kwargs missing 'pretty_alias' key")
         _alias = _sub_p.__name__
 
     setproctitle(_alias)
@@ -53,7 +69,11 @@ def run_sub_p(*args, **kwargs):
     try:
         loop = asyncio.new_event_loop()
     except Exception as e:
-        _log.error(f"Failed to start event loop")
+        _log.error(
+            f"{alias.capitalize()}.run_sub_p failed to start event loop: "
+            f"{str(e) if (e.__cause__) else str(e)}\n"
+            f"{str(e.__traceback__) if e.__traceback__ else str()}"
+        )
 
     if not loop:
         return
@@ -61,26 +81,35 @@ def run_sub_p(*args, **kwargs):
     proc_t = loop.create_task(_sub_p(**kwargs))
     try:
         loop.run_until_complete(proc_t)
-    except KeyboardInterrupt:
+
+    except (asyncio.CancelledError, KeyboardInterrupt):
         _log.debug(f"Terminating {_alias} sub process and exiting at PID {os.getpid()}")
         proc_t.cancel()
 
         # cleanup
         try:
             loop.run_until_complete(proc_t)
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            pass
+
         except RuntimeError as e:
             if str(e) == 'This event loop is already running':
                 pass
             else:
-                _log.error(f"Unhandled RuntimeError raised at {run_sub_p.__name__}: {str(e)}")
+                _log.error(
+                    f"Unhandled RuntimeError raised at {run_sub_p.__name__}: "
+                    f"{str(e)}"
+                )
+
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
+
         raise
 
     except Exception as e:
-        _log.error(f"Unhandled exception while attempting loop.run_forver(): {str(e)}")
+        _log.error(
+            f"Unhandled exception while attempting loop.run_forver(): "
+            f"{str(e)}"
+        )
+
     finally:
         loop.close()
 
@@ -95,7 +124,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
     hardware_queue = multiprocessing.Queue()
     sys_queue = multiprocessing.Queue()
     triggers_queue = multiprocessing.Queue()
-    mqttclient_queue = multiprocessing.Queue()
+    mqttclient_q = multiprocessing.Queue()
 
     task_manager_kwargs = {
         'alias': Registry.Modules.TaskManager.alias,
@@ -105,7 +134,8 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         'hardware_q': hardware_queue,
         'sysmonitor_q': sys_queue,
         'triggers_q': triggers_queue,
-        'api_stat': api_status
+        'api_stat': api_status,
+        'mqttclient_q': mqttclient_q
     }
 
     httpclient_kwargs = {
@@ -129,7 +159,12 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # first, spawn and run the task manager process
         processes : List[multiprocessing.Process] = []
         for p_kwargs in kwargs_list:
-            processes.append(multiprocessing.Process(target=run_sub_p, kwargs=p_kwargs, name=p_kwargs['alias']))
+            processes.append(multiprocessing.Process(
+                target=run_sub_p,
+                kwargs=p_kwargs,
+                name=p_kwargs['alias']
+                )
+            )
 
         for proc in processes:
             proc.start()
@@ -143,8 +178,17 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # pass the msg_queue to the handler object
         # then create and run the callback_client task
         # pass the callback method of the handler object
-        handler = mqttclient.Handler(task_queue=task_queue, sys_queue=sys_queue)
-        coroutines.append(asyncio.create_task(mqttclient.start_client(msg_handler=handler.msg_callback, mqttclient_q=mqttclient_queue)))
+        handler = mqttclient.Handler(
+            task_queue=task_queue,
+            sys_queue=sys_queue
+        )
+        coroutines.append(asyncio.create_task(
+            mqttclient.start_client(
+                msg_handler=handler.msg_callback,
+                mqttclient_q=mqttclient_q
+            )
+        ))
+        
         # start the system monitor queue
         sysmonitor_args = {
             'sys_queue': sys_queue,
@@ -157,6 +201,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # shutdown and cleanup
         try:
             await asyncio.gather(*coroutines)
+            
         except (asyncio.CancelledError, KeyboardInterrupt) as e:
             _log.warning(f"Main process received {type(e).__name__}, shutting down operations")
 
@@ -176,15 +221,24 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
             await asyncio.sleep(0.1)
 
     except Exception as e:
-        _log.error(f"Parent process called {type(e).__name__} exception: {str(e.__cause__)}")
+        _log.error(
+            f"Parent process called {type(e).__name__} exception:"
+            f"{str(e.__cause__) if e.__cause__ else str(e)}"
+        )
         raise SystemExit()
 
 # create a new event loop and then run the main process within that loop
 def run(core_status: int, api_status: int):
     if api_status == status.DISCONNECTED:
-        _log.warning("Cannot establish connection with API, proceeding with API disconnect protocols")
+        _log.warning(
+            "Cannot establish connection with API, "
+            "proceeding with API disconnect protocols"
+        )
     elif api_status == status.FAILED:
-        _log.warning("Connection with API established but health check returned with failure")
+        _log.warning(
+            "Connection with API established "
+            "but health check returned with failure"
+        )
 
     loop: asyncio.AbstractEventLoop | None = None
     try:
@@ -196,8 +250,10 @@ def run(core_status: int, api_status: int):
     # if loop event loop is present, run main()
     if loop:
         main_t = loop.create_task(main(loop, api_status))
+
         try:
             loop.run_forever()
+
         except KeyboardInterrupt:
             main_t.cancel()
             try:
@@ -205,11 +261,14 @@ def run(core_status: int, api_status: int):
             except asyncio.CancelledError:
                 pass
             raise
+
         except Exception as e:
             _log.error(f"Failed to run main loop: {str(e)}")
+
         finally:
             _log.debug(f"Closing main() loop at PID {os.getpid()}")
             loop.close()
+            
     else:
         return
 
@@ -217,6 +276,8 @@ def run(core_status: int, api_status: int):
 # returns a tuple of status literals, core status and api connection status
 # TODO: add an environment variables check in settings.py and call it in this method
 def sys_check() -> Tuple[int, int]:
+    # TODO: add var checks
+
     # the core functions status, excluding the api connection status
     core_status: int
     # the api status

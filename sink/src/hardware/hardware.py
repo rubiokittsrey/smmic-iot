@@ -12,8 +12,16 @@ from typing import Dict, Any, List, Callable
 from concurrent.futures import ThreadPoolExecutor
 
 # internal helpers, configurations
-from utils import logger_config, get_from_queue
-from settings import Topics, APPConfigurations, Broker, Registry
+from utils import (
+    logger_config,
+    get_from_queue
+)
+from settings import (
+    Topics,
+    APPConfigurations,
+    Broker,
+    Registry
+)
 
 if not APPConfigurations.DISABLE_IRRIGATION:
     import src.hardware.irrigation as irrigation
@@ -46,39 +54,61 @@ async def _delegator(semaphore: asyncio.Semaphore, task: Dict) -> Any:
                 _IRRIGATION_QUEUE.put(task_payload)
 
 # begin the hardware module process
-async def start(hardware_q: multiprocessing.Queue, taskmanager_q: multiprocessing.Queue) -> None:
+async def start(
+        hardware_q: multiprocessing.Queue,
+        taskmanager_q: multiprocessing.Queue
+        ) -> None:
+    
     semaphore = asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT)
+    
     # acquire the current running event loop
-    loop: asyncio.AbstractEventLoop | None = None
+    loop = None
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Failed to get running event loop at PID {os.getpid()} (hardware module child process): {e}")
+        _log.error(
+            f"{alias.capitalize()} failed to acquire running event loop: "
+            f"{str(e.__cause__) if (e.__cause__) else str(e)}"
+        )
         return
 
     if loop:
-        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
+        _log.info(f"{alias.capitalize()} subprocess active")
 
         try:
             try:
                 asyncio.create_task(irrigation.start(_IRRIGATION_QUEUE))
+            
             except NameError as e:
-                _log.info(f'{alias} starting with irrigation module disabled'.capitalize())
+                _log.info(f'{alias.capitalize()} starting with irrigation module disabled')
+            
             with ThreadPoolExecutor() as pool:
                 while True:
-                    task = await loop.run_in_executor(pool, get_from_queue, hardware_q, __name__)
+                    task = await loop.run_in_executor(
+                        pool,
+                        get_from_queue,
+                        hardware_q,
+                        __name__
+                    )
+                    
                     if task:
                         try:
-                            if task['topic'].count('irrigation') > 0 and APPConfigurations.DISABLE_IRRIGATION:
+                            if (task['topic'].count('irrigation') > 0
+                                    and APPConfigurations.DISABLE_IRRIGATION):
                                 continue
+                        
                         # NOTE: this could present problmes in the future
                         # if something fucks up, theres a good chance its here
                         except KeyError:
                             pass
+                        
                         asyncio.create_task(_delegator(semaphore, task))
 
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
 
         except Exception as e:
-            _log.error(f"Unhandled exception raised at PID {os.getpid()} ({__name__}): {str(e)}")
+            _log.error(
+                f"Unhandled exception raised at {alias.capitalize()}:"
+                f"{str(e)}"
+            )

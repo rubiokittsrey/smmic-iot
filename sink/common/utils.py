@@ -282,7 +282,7 @@ class SensorData:
             if not _num_check:
                 final.update({x[0]: x[1]})
             else:
-                final_num : int = _num_check(x[1])
+                final_num = _num_check(x[1])
                 if final_num > 100:
                     final_num = 99
                 final.update({x[0]: final_num})
@@ -511,7 +511,13 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
 
     return msg
 
-def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any, nowait = False) -> Tuple[int, Any]:
+def put_to_queue(
+        queue:multiprocessing.Queue,
+        name:str,
+        data: Any,
+        nowait = False
+        ) -> Tuple[int, Any]:
+    
     buffer = None
     result = status.FAILED
     try:

@@ -5,13 +5,30 @@ import logging
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
-from paho.mqtt import client as paho_mqtt, enums, reasoncodes, properties
+from paho.mqtt import (
+    client as paho_mqtt,
+    enums,
+    reasoncodes,
+    properties
+)
 from typing import Any, Dict
 from datetime import datetime
 
 # internal
-from settings import Broker, APPConfigurations, Topics, DevTopics, DEV_MODE, Registry
-from utils import logger_config, status, get_from_queue
+from settings import (
+    Broker,
+    APPConfigurations, 
+    Topics, 
+    DevTopics, 
+    DEV_MODE, 
+    Registry,
+    PubTopics
+)
+from utils import (
+    logger_config,
+    status,
+    get_from_queue
+)
 
 # settings, configurations
 alias = Registry.Modules.MqttClient.alias
@@ -30,30 +47,59 @@ _CALLBACK_CLIENT: paho_mqtt.Client | None = None
 def _init_client() -> paho_mqtt.Client | None:
     client = None
     try:
-        client = paho_mqtt.Client(callback_api_version=enums.CallbackAPIVersion.VERSION2,client_id = APPConfigurations.CLIENT_ID, protocol=paho_mqtt.MQTTv311)
-        _log.debug(f"Callback client successfully created: {APPConfigurations.CLIENT_ID}, {client._protocol}")
+        client = paho_mqtt.Client(
+            callback_api_version=enums.CallbackAPIVersion.VERSION2,
+            client_id = APPConfigurations.CLIENT_ID,
+            protocol=paho_mqtt.MQTTv311
+        )
+        _log.debug(
+            f"Callback client successfully created: "
+            f"{APPConfigurations.CLIENT_ID}, "
+            f"{client._protocol}"
+        )
 
     except Exception as e:
-        _log.error(f"Client module was unable to succesffully create a callback client at __init_client(): {str(e)}")
+        _log.error(
+            f"{alias.capitalize()} failed to create MQTT client object: "
+            f"{str(e)}"
+        )
 
     return client
 
 # internal callback functions
 def _on_connected(client:paho_mqtt.Client, userData, flags, rc, properties) -> None:
-    _log.debug(f"Callback client connected to broker at {Broker.HOST}:{Broker.PORT}")
+    _log.debug(
+        f"Callback client connected to broker at "
+        f"{Broker.HOST}:{Broker.PORT}"
+    )
 
-def _on_disconnected(client: paho_mqtt.Client,
-                     userData: Any,
-                     disconnect_flags: paho_mqtt.DisconnectFlags,
-                     rc: reasoncodes.ReasonCode,
-                     properties: properties.Properties) -> None:
+def _on_disconnected(
+        client: paho_mqtt.Client,
+        userData: Any,
+        disconnect_flags: paho_mqtt.DisconnectFlags,
+        rc: reasoncodes.ReasonCode,
+        properties: properties.Properties) -> None:
+    
     _log.warning(f"Callback client has been disconnected from broker: {rc}")
 
-def _on_pub(client: paho_mqtt.Client, userData: Any, mid: int, rc: reasoncodes.ReasonCode, prop: properties.Properties):
+def _on_pub(
+        client: paho_mqtt.Client,
+        userData: Any,
+        mid: int,
+        rc: reasoncodes.ReasonCode,
+        prop: properties.Properties
+        ):
+    
     # TODO: implement on publish, not sure what to do
     return
 
-def _on_sub(client: paho_mqtt.Client, userdata, mid, reason_code_list, properties):
+def _on_sub(
+        client: paho_mqtt.Client,
+        userdata,
+        mid,
+        reason_code_list,
+        properties):
+    
     #TODO: fix this shit code
     _log.debug(f"Callback client subscribed to topic: {_subscriptions[0]}")
     _subscriptions.pop(0)
@@ -69,27 +115,39 @@ def _subscribe(client: paho_mqtt.Client) -> None:
     for topic in topics:
         if topic.count('/') == 0:
             continue
+        
         try:
             client.subscribe(topic=topic, qos=2)
             _subscriptions.append(topic)
+        
         except Exception as e:
-            _log.warning(f"Unable to subscribe callback client to topic {topic}: {str(e)}")
+            _log.warning(
+                f"Unable to subscribe callback client to topic {topic}:"
+                f"{str(e)}"
+            )
 
 # connect the client
 # start the loop
 # subscribe to topics
 # add the message handler callback function
-async def _connect_loop(client: paho_mqtt.Client | None, _msg_handler: paho_mqtt.CallbackOnMessage) -> bool:
-    if not client: return False
-
+async def _connect_loop(
+        client: paho_mqtt.Client,
+        _msg_handler: paho_mqtt.CallbackOnMessage
+        ) -> bool:
+    
     global _CLIENT_STAT
     global _CALLBACK_CLIENT
 
     try:
-        client.connect(Broker.HOST, Broker.PORT)
+        client.connect(
+            Broker.HOST,
+            Broker.PORT
+        )
         client.loop_start()
     except Exception as e:
-        _log.error(f"Unable to establish successful connection with broker: {e}")
+        _log.error(
+            f"Unable to establish successful connection with broker: "
+            f"{str(e.__cause__) if e.__cause__ else str(e)}")
         return False
     
     # 1 second wait to ensure client is connected
@@ -129,11 +187,18 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
             _client.connect(Broker.HOST, Broker.PORT)
             _CLIENT_STAT = status.SUCCESS
         except Exception as e:
-            _log.error(f"Unable to establish successful connection with broker: {e}, retrying again in {timeout} seconds (attempts remaining: {attempts})")
+            _log.error(
+                f"Unable to establish successful connection with broker: "
+                f"{str(e.__cause__) if e.__cause__ else str(e)}, "
+                f"retrying again in {timeout} seconds (attempts remaining: {attempts})"
+            )
             time.sleep(timeout)
 
         if attempts == 0:
-            _log.critical(f"Callback client was unable to successfully connect with broker at {Broker.HOST}:{Broker.PORT}, max attempts allowed reached!")
+            _log.critical(
+                f"Callback client was unable to successfully connect with broker at "
+                f"{Broker.HOST}:{Broker.PORT}, max attempts allowed reached!"
+            )
             _CLIENT_STAT = status.FAILED
 
         if _CLIENT_STAT == status.SUCCESS:
@@ -141,38 +206,48 @@ def _on_connect_f(_client: paho_mqtt.Client, _userdata: Any):
 
 # NOTE: temporary, this is better with async mqtt libraries
 # shape of data expected: device_id;signal (0 / 1);timestamp;
-def _irrigation_trigger(data: Dict) -> Any:
-    if not _CALLBACK_CLIENT:
-        _log.warning(f'Callback client of MQTTClient moule is not initialized')
-        return
+async def _irrigation_trigger(
+        data: Dict,
+        client: paho_mqtt.Client
+        ) -> Any:
 
     try:
-        msg = _CALLBACK_CLIENT.publish(
-            topic=f"{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}",
-            payload=data['signal'],
+        msg = client.publish(
+            topic=f"{PubTopics.SE_INTERVAL_TRIGGER}{data['device_id']}",
+            payload=data['command'],
             qos=1
         )
+        msg.wait_for_publish()
         if msg.is_published():
-            _log.debug(f'Published sensor irrigation trigger: {data}')
+            _log.debug(f"Published sensor irrigation trigger: {data}")
+
     except Exception as e:
-        _log.error(f'Unable to publish sensor irrigation trigger: {str(e.__cause__) if (e.__cause__) else str(e)}')
+        _log.error(
+            f"Unable to publish sensor irrigation trigger: "
+            f"{str(e.__cause__) if (e.__cause__) else str(e)}"
+        )
 
 # shape of data expected: device_id;seconds;timestamp
-def _interval_trigger(data: Dict) -> Any:
-    if not _CALLBACK_CLIENT:
-        _log.warning(f'Callback client of MQTTClient module not initialized')
-        return
-
+async def _interval_trigger(
+        data: Dict,
+        client: paho_mqtt.Client
+        ) -> Any:
+    
     try:
-        msg = _CALLBACK_CLIENT.publish(
-            topic=f"{Topics.SE_INTERVAL_TRIGGER}{data['device_id']}",
-            payload=data['seconds'],
+        msg = client.publish(
+            topic=f"{PubTopics.SE_INTERVAL_TRIGGER}{data['device_id']}",
+            payload=data['interval'],
             qos=1
         )
+        msg.wait_for_publish()
         if msg.is_published():
             _log.debug(f'Published sensor interval trigger: {data}')
+            
     except Exception as e:
-        _log.error(f'Unable to publish sensor interval trigger: {str(e.__cause__) if (e.__cause__) else str(e)}')
+        _log.error(
+            f"Unable to publish sensor interval trigger: "
+            f"{str(e.__cause__) if (e.__cause__) else str(e)}"
+        )
 
 # starts the client
 # optional message callback functions can be added
@@ -190,7 +265,10 @@ async def start_client(
     try:
         loop = asyncio.get_running_loop()
     except Exception as e:
-        _log.error(f"Failed to acquire running event loop: {str(e.__cause__) if (e.__cause__) else str(e)}")
+        _log.error(
+            f"Failed to acquire running event loop: "
+            f"{str(e.__cause__) if (e.__cause__) else str(e)}"
+        )
         return
     
     # set username and password (if exists)
@@ -208,7 +286,7 @@ async def start_client(
 
     con = await _connect_loop(_client, msg_handler)
     if con:
-        _log.info(f"Callback client running and connected at PID: {os.getpid()}")
+        _log.info(f"{alias.capitalize()} running and connected")
 
     # keep this client thread alive
     # with ThreadPoolExecutor() as pool:
@@ -222,24 +300,35 @@ async def start_client(
 
     with ThreadPoolExecutor() as pool:
         while True:
-            data = await loop.run_in_executor(pool, get_from_queue, mqttclient_q, __name__)
+            data = await loop.run_in_executor(
+                pool,
+                get_from_queue,
+                mqttclient_q,
+                __name__
+            )
             
             if data and list(data.keys()).count('trigger'):
 
                 if data['context'] == Registry.Triggers.contexts.SE_IRRIGATION_OVERRIDE:
-                    asyncio.create_task(_irrigation_trigger(data))
+                    asyncio.create_task(_irrigation_trigger(
+                        data['data'],
+                        _client
+                    ))
 
                 elif data['context'] == Registry.Triggers.contexts.SE_INTERVAL:
-                    asyncio.create_task(_interval_trigger(data))
+                    asyncio.create_task(_interval_trigger(
+                        data['data'],
+                        _client
+                    ))
 
             await asyncio.sleep(0.05)
 
-def get_client() -> paho_mqtt.Client | None:
-    if _CALLBACK_CLIENT:
-        return _CALLBACK_CLIENT
-    else:
-        _log.error(f"The callback client does not exist, are you sure the client is instantiated?")
-        return None
+# def get_client() -> paho_mqtt.Client | None:
+#     if _CALLBACK_CLIENT:
+#         return _CALLBACK_CLIENT
+#     else:
+#         _log.error(f"The callback client does not exist, are you sure the client is instantiated?")
+#         return None
 
 # shutdown the client, perform cleanup
 # handle exceptions
@@ -251,22 +340,28 @@ async def shutdown_client() -> bool:
         _log.error(f"Cannot disconnect or shutdown a callback client that does not exist!")
         return False
     
-    _log.info(f"Shutting down SMMIC callback client at PID: {os.getpid()}")
+    _log.info(f"Shutting down SMMIC callback client")
 
     if _CLIENT_STAT == status.SUCCESS:
         # disconnect client
         try:
-            _log.debug(f"Disconnecting callback client {APPConfigurations.CLIENT_ID} from broker at {Broker.HOST, Broker.PORT}")
+            _log.debug(
+                f"Disconnecting callback client {APPConfigurations.CLIENT_ID} "
+                f"from broker at {Broker.HOST}:{Broker.PORT}"
+            )
             _CALLBACK_CLIENT.disconnect()
         except Exception as e:
-            _log.error(f"Unable to disconnect client: {e}, forcing disconnect")
+            _log.error(f"Unable to disconnect client: {e}, forcing shutdown")
         
         # stop client
         try:
-            _log.debug(f"Terminating callback client loop at PID: {os.getpid()}")
+            _log.debug(f"{alias.capitalize()} terminating callback client loop")
             _CALLBACK_CLIENT.loop_stop()
+
         except Exception as e:
-            _log.error(f"Unable to stop client loop: {e}, forcing task termination by exiting process (os._exit(0))")
+            _log.error(
+                f"Unable to stop client loop: {str(e.__cause__) if e.__cause__ else str(e)}, "
+                f"forcing task termination by exiting process (os._exit(0))")
             os._exit(0) # TODO: execute thread terminate
             # NOTE: if something funny happens, its probably this ^^
 
@@ -278,7 +373,12 @@ async def shutdown_client() -> bool:
 
 # necessary handler class in order to include the usage of the Queue object in the message callback of the client
 class Handler:
-    def __init__(self, task_queue: multiprocessing.Queue, sys_queue: multiprocessing.Queue) -> None:
+    def __init__(
+            self,
+            task_queue: multiprocessing.Queue,
+            sys_queue: multiprocessing.Queue
+            ) -> None:
+        
         self._task_queue: multiprocessing.Queue = task_queue
         self._sys_queue: multiprocessing.Queue = sys_queue
 
@@ -286,7 +386,12 @@ class Handler:
     # routes the messages received by the client on relevant topics to the queue
     # sets the priority for each task
     # NOTE to self: can be scaled to do more tasks just in case
-    def msg_callback(self, client: paho_mqtt.Client, userdata: Any, message: paho_mqtt.MQTTMessage) -> None:
+    def msg_callback(
+            self,
+            client: paho_mqtt.Client,
+            userdata: Any,
+            message: paho_mqtt.MQTTMessage
+            ) -> None:
 
         # -->
         # {priority: the priority of the message
@@ -301,15 +406,29 @@ class Handler:
         try:
             payload = str(message.payload.decode('utf-8'))
         except UnicodeDecodeError as e:
-            _log.warning(f'{__name__} failed to decode payload from topic {message.payload}: {message.payload}')
+            _log.warning(
+                f"{alias.capitalize()} failed to decode payload from topic "
+                f"{message.payload}: {message.payload}"
+            )
 
         try:
             if topic.startswith("$SYS"):
-                self._sys_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
+                self._sys_queue.put({
+                    'topic': topic,
+                    'payload': payload,
+                    'timestamp': timestamp
+                })
             else:
-                self._task_queue.put({'topic': topic, 'payload': payload, 'timestamp': timestamp})
+                self._task_queue.put({
+                    'topic': topic,
+                    'payload': payload,
+                    'timestamp': timestamp
+                })
 
         except Exception as e:
-            _log.warning(f"Error routing message to queue (Handler.msg_callback()): ('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}")
+            _log.warning(
+                f"Error routing message to queue (Handler.msg_callback()): "
+                f"('topic': {topic}, 'payload': {payload}) - ERROR: {str(e)}"
+            )
 
         return
