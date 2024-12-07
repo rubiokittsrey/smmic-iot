@@ -1,4 +1,5 @@
 from paho.mqtt import client as mqtt, enums
+from datetime import datetime
 import time
 
 DEVICE_ID = "86db1aee-6d62-42f4-ae89-8ed8d839cd53"
@@ -26,13 +27,13 @@ def on_msg_callback(
     topic = ""
 
     if msg.topic == SE_IRRIGATION_TRIGGER:
-        reply_payload = f"{DEVICE_ID};{msg.payload};{msg.topic}"
+        reply_payload = f"{DEVICE_ID};{str(datetime.now())};{msg.payload.decode('utf-8')}"
     elif msg.topic == SE_INTERVAL:
         reply_payload = f"{DEVICE_ID};{msg.payload};{msg.topic}"
 
     try:
         pub = mqttclient.publish(
-            topic = USR_COMMANDS_FEEDBACK,
+            topic = SE_IRRIGATON,
             payload = reply_payload.encode('utf-8'),
             qos = 1
         )

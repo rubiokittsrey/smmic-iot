@@ -199,7 +199,7 @@ async def _trigger(data: dict[str, Any]):
 
         if 'irrigation' in split[2].split('/'):
             return
-            # f_data['context'] = 'irrigation'
+            f_data['context'] = 'irrigation'
         elif 'interval' in split[2].split('/'):
             f_data['context'] = 'interval'
 
@@ -209,7 +209,7 @@ async def _trigger(data: dict[str, Any]):
         data = f_data
     )
 
-    _log.debug(f'{alias.capitalize()} trigger sent: {data}')
+    _log.debug(f'{alias.capitalize()} trigger sent: {f_data}')
 
 async def start(
         taskmanager_q: multiprocessing.Queue,

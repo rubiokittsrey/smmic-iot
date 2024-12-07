@@ -104,7 +104,8 @@ async def _delegator(
 
     # pusher
     pusher_queue_topics = [
-        Topics.COMMANDS_FEEDBACK
+        Topics.COMMANDS_FEEDBACK,
+        Topics.IRRIGATION
     ]
     
     # test topics
@@ -164,7 +165,7 @@ async def _delegator(
                             'disconnected': True
                         }))
 
-            if data['topic'] == Topics.COMMANDS_FEEDBACK:
+            if data['topic'] in pusher_queue_topics:
                 # TODO: map data first
                 dest.append((pusherclient_q, data))
 
