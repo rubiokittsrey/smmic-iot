@@ -215,8 +215,8 @@ def is_num(var) -> type[float | int] | None:
         except ValueError:
             pass
 
-    if _type is None:
-        _logs.warning(f"Failed num_check at {__name__}: {var}")
+    # if _type is None:
+    #     _logs.warning(f"Failed num_check at {__name__}: {var}")
 
     return _type
 

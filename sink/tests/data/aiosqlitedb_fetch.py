@@ -9,7 +9,7 @@ from settings import APPConfigurations
 
 async def fetch(read_semaphore, connection):
     async with read_semaphore:
-        sql = "SELECT * FROM UNSYNCEDDATA"
+        sql = "SELECT * FROM SENSORDATA"
 
         rows : Any = None
         try:
@@ -24,7 +24,7 @@ async def fetch(read_semaphore, connection):
 async def run2():
     await asyncio.sleep(2)
     try:
-        async with aiosqlite.connect(f"{APPConfigurations.LOCAL_STORAGE_DIR}local.db") as connection:
+        async with aiosqlite.connect(f"{APPConfigurations.LOCAL_STORAGE_DIR}local_backup.db") as connection:
             data = await fetch(asyncio.Semaphore(APPConfigurations.GLOBAL_SEMAPHORE_COUNT), connection)
             for r in data:
                 print(r)
