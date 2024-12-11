@@ -9,7 +9,7 @@ from typing import Any, List
 from settings import APPConfigurations
 from utils import SensorData
 
-se_id = ''
+se_id = '58c6dd67-3200-4bf0-8044-a851465edd02'
 
 async def fetch(read_semaphore, db):
     async with read_semaphore:
@@ -40,7 +40,7 @@ async def start():
         print(f"{type(e).__name__} raised: {str(e)}")
 
 def write_to_json(data: list):
-    fpath = f"{se_id}.json"
+    fpath = "sensor_one.json"
 
     mlist: list[dict] = []
 
@@ -50,7 +50,7 @@ def write_to_json(data: list):
         rmap.pop('sensor_type')
         rmap.pop('battery_level')
         rmap.pop('device_id')
-        rmap.pop('payload')
+        #rmap.pop('payload')
 
         try:
             rmap['timestamp'] = datetime.strptime(
