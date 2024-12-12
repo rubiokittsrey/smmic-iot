@@ -103,7 +103,11 @@ async def _put_to_queue(queue: multiprocessing.Queue):
                 data = data + f'&{d}'
             timestamp = str(datetime.now())
             payload = f'{APPConfigurations.CLIENT_ID};{timestamp};{data}'
-            msg.update({'topic':Topics.SINK_DATA, 'payload':f'{payload}', 'timestamp': timestamp})
+            msg.update({
+                'topic':Topics.SINK_DATA,
+                'payload':f'{payload}',
+                'timestamp': timestamp
+                })
 
             try:
                 with ThreadPoolExecutor() as pool:

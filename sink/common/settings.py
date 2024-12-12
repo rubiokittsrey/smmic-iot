@@ -20,10 +20,12 @@ _envpath = os.path.join(os.path.dirname(__file__), '../.env')
 load_dotenv(_envpath)
 
 # get variables from the .env file
-def _from_env(key: str) -> Any:
+def _from_env(key: str) -> str:
     var = os.getenv(key)
     if var:
         return var
+    else:
+        return ''
 
 # global vars
 LOGGING_LEVEL = logging.DEBUG
@@ -54,22 +56,47 @@ DEV_MODE = __get_dev_mode__()
 
 # application configurations 
 class APPConfigurations:
-    GLOBAL_SEMAPHORE_COUNT : int = _settings_yaml["app_configurations"]["global_semaphore_count"]
+    GLOBAL_SEMAPHORE_COUNT : int = (
+        _settings_yaml
+            ["app_configurations"]
+            ["global_semaphore_count"]
+    )
 
-    MQTT_PW : str = _settings_yaml["app_configurations"]["mqtt_pwd"]
-    MQTT_USERNAME : str = _settings_yaml["app_configurations"]["mqtt_username"]
+    MQTT_PW : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["mqtt_pwd"]
+    )
+    MQTT_USERNAME : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["mqtt_username"]
+    )
 
-    CLIENT_ID : str = _settings_yaml["app_configurations"]["client_id"]
+    CLIENT_ID : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["client_id"]
+    )
     PRIMARY_NET_INTERFACE : str = _app_net_configs["primary_interface"]
     SRC_PATH : str = _test_configs["src_path"]
     GATEWAY : str = _app_net_configs["gateway"]
     NET_CHECK_INTERVALS = _app_net_configs["network_check_intervals"] * 60
     NETWORK_TIMEOUT : int = _app_net_configs["timeout"]
     NETWORK_MAX_TIMEOUT_RETRIES : int = _app_net_configs["max_connection_timeouts"]
-    API_DISCON_WAIT : int = _settings_yaml['app_configurations']['api_disconnect_await']
+    API_DISCON_WAIT : int = (
+        _settings_yaml
+            ['app_configurations']
+            ['api_disconnect_await']
+    )
 
     # local storage
-    LOCAL_STORAGE_DIR : str = _settings_yaml["app_configurations"]["local_storage"]["directory"]
+    LOCAL_STORAGE_DIR : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["local_storage"]
+            ["directory"]
+    )
 
     #logging
     LOG_FILE_DIRECTORY : str = _dev_configs["log_file_directory"]
@@ -79,12 +106,63 @@ class APPConfigurations:
     def _disable_irr() -> bool | None:
         val: bool | None = None
         try:
-            val = _settings_yaml["app_configurations"]["disable_irrigation"]
+            val = (
+                _settings_yaml
+                    ["app_configurations"]
+                    ["disable_irrigation"]
+            )
+        
         except KeyError:
             pass
+        
         return val
 
     DISABLE_IRRIGATION: bool | None = _disable_irr()
+
+    # pysher configurations
+    PUSHER_APP_ID : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["app_id"]
+    )
+    PUSHER_KEY : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["key"]
+    )
+    PUSHER_SECRET : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["secret"]
+    )
+    PUSHER_CLUSTER : str = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["cluster"]
+    )
+    PUSHER_SSL : bool = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["ssl"]
+    )
+    PUSHER_CHANNELS : List[str] = (
+        _settings_yaml
+            ["app_configurations"]
+            ["pusher"]
+            ["channels"]
+    )
+
+    # events
+    PUSHER_EVENT_IRR : str = _from_env('PUSHER_EVENT_IRRIGATION')
+    PUSHER_EVENT_INT : str = _from_env('PUSHER_EVENT_INTERVAL')
+    PUSHER_EVENT_FEEDBACK : str = _from_env('PUSHER_EVENT_FEEDBACK')
+
+    REGISTERED_SENSORS : List[str] = _settings_yaml["registered_sensors"]
 
 # api base url, enpoints
 class APIRoutes:
@@ -120,13 +198,38 @@ class Channels:
 # mqtt functional topics
 class Topics:
     ROOT_TOPIC : str = _from_env("ROOT_TOPIC")
-    ADMIN_SETTINGS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_SETTINGS_TOPIC')}"
-    ADMIN_COMMANDS : str = f"{ROOT_TOPIC}{_from_env('ADMIN_COMMANDS_TOPIC')}"
-    SENSOR_DATA : str = f"{ROOT_TOPIC}{_from_env('SENSOR_DATA_TOPIC')}"
-    SENSOR_ALERT : str = f"{ROOT_TOPIC}{_from_env('SENSOR_ALERT_TOPIC')}"
-    SINK_DATA : str = f"{ROOT_TOPIC}{_from_env('SINK_DATA_TOPIC')}"
-    SINK_ALERT : str = f"{ROOT_TOPIC}{_from_env('SINK_ALERT_TOPIC')}"
-    IRRIGATION : str = f"{ROOT_TOPIC}{_from_env('IRRIGATION_TOPIC')}"
+    ADMIN_SETTINGS : str = (
+        ROOT_TOPIC +
+        _from_env('ADMIN_SETTINGS_TOPIC')
+    )
+    ADMIN_COMMANDS : str = (
+        ROOT_TOPIC +
+        _from_env('ADMIN_COMMANDS_TOPIC')
+    )
+    SENSOR_DATA : str = (
+        ROOT_TOPIC +
+        _from_env('SENSOR_DATA_TOPIC')
+    )
+    SENSOR_ALERT : str = (
+        ROOT_TOPIC +
+        _from_env('SENSOR_ALERT_TOPIC')
+    )
+    SINK_DATA : str = (
+        ROOT_TOPIC +
+        _from_env('SINK_DATA_TOPIC')
+    )
+    SINK_ALERT : str = (
+        ROOT_TOPIC +
+        _from_env('SINK_ALERT_TOPIC')
+    )
+    IRRIGATION : str = (
+        ROOT_TOPIC +
+        _from_env('IRRIGATION_TOPIC')
+    )
+    COMMANDS_FEEDBACK : str = (
+        ROOT_TOPIC +
+        _from_env('USER_COMMANDS_FEEDBACK')
+    )
 
     # sys topics
     SYS_BYTES_RECEIVED : str = _from_env('BROKER_BYTES_RECEIVED')
@@ -153,7 +256,6 @@ class Topics:
                     smmic_topics.append(topic_value)
 
         return smmic_topics, sys_topics
-                    
 
     # def data_topics() -> List[str]: # type: ignore
     #     _topics: List[str] = []
@@ -166,6 +268,18 @@ class Topics:
     #             if key.count("DATA") > 0 or key.count()
 
     #     return _topics, _sys_topics
+
+class PubTopics:
+    # command / trigger topics
+    SE_INTERVAL_TRIGGER : str = (
+        Topics.ROOT_TOPIC +
+        _from_env('SENSOR_INTERVAL_TRIGGER')
+    )
+    
+    SE_IRRIGATION_TRIGGER : str = (
+        Topics.ROOT_TOPIC +
+        _from_env('SENSOR_IRRIGATION_TRIGGER')
+    )
 
 # returns two lists of ** all ** available topics
 # one for application topics the other for system topics
@@ -199,6 +313,10 @@ class Registry:
         class contexts:
             API_CONNECTION_STATUS = 'api_connection_status'
             UNSYNCED_DATA = 'unsynced_data'
+            
+            # commands
+            SE_INTERVAL = "se_interval"
+            SE_IRRIGATION_OVERRIDE = "se_irrigation_override"
 
     class Modules:
         
@@ -233,6 +351,9 @@ class Registry:
         class SystemMonitor:
             alias = 'sysmonitor'
 
+        class PusherClient:
+            alias = 'pusher-client'
+
         # ----- mqtt -----
 
         class MqttClient:
@@ -240,6 +361,9 @@ class Registry:
 
         class Service:
             alias = 'service'
+
+        class telemetrymanager:
+            alais = 'telemetry-manager'
         
         # ----- hardware -----
 

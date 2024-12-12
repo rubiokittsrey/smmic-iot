@@ -16,7 +16,7 @@ while True:
     sensor_type: str = "soil_moisture"
     device_id: str = "fd7b1df2-3822-425c-b4c3-e9859251728d"
     timestamp: str = str(datetime.datetime.now())
-    sm: int = randint(60, 94)
+    sm: int = randint(5, 30)
     hm: int = randint(60, 94)
     tmp: int = randint(20, 25)
     batt: int = randint(50, 100)

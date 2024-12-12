@@ -1,5 +1,6 @@
 *.log
 sink/settings.yaml
+sink/sensor_confs.yaml
 .vscode
 sink/common/logs/smmic.log
 .win-dev-env
@@ -8,3 +9,4 @@ sink/common/logs/smmic.log
 *.db-shm
 *.db-wal
 *.bak.log
+*.log.bak

@@ -8,6 +8,7 @@ import re
 import logging
 import multiprocessing
 import queue as qlib
+from datetime import datetime
 from typing import Tuple, Optional, Dict, List, Any
 
 # do not use
@@ -214,8 +215,8 @@ def is_num(var) -> type[float | int] | None:
         except ValueError:
             pass
 
-    if _type is None:
-        _logs.warning(f"Failed num_check at {__name__}: {var}")
+    # if _type is None:
+    #     _logs.warning(f"Failed num_check at {__name__}: {var}")
 
     return _type
 
@@ -262,6 +263,11 @@ class SensorData:
 
         # parse the data from the 3rd index of the payload split
         data : List[str] = outer_split[3].split("&")
+        
+        from_epoch_check = is_num(final['timestamp']) 
+        if from_epoch_check:
+            formatted_time : datetime = datetime.fromtimestamp(from_epoch_check(final['timestamp']));
+            final['timestamp'] = str(formatted_time);
 
         # remove empty strings in the list
         for i in range(data.count("")):
@@ -276,7 +282,10 @@ class SensorData:
             if not _num_check:
                 final.update({x[0]: x[1]})
             else:
-                final.update({x[0]: _num_check(x[1])})
+                final_num = _num_check(x[1])
+                if final_num > 100:
+                    final_num = 99
+                final.update({x[0]: final_num})
 
         # if outer_split[0] == 'sensor_type':
         #     data : List = outer_split[3].split(":")
@@ -451,11 +460,22 @@ class SensorAlerts:
         outer_split: List[str] = payload.split(';')
         final = {'device_id': outer_split[0], 'timestamp': outer_split[1]}
 
+        # from_epoch_check = is_num(final['timestamp'])
+        # if from_epoch_check:
+        #     formatted_time : datetime = datetime.fromtimestamp(from_epoch_check(final['timestamp']))
+        #     final['timestamp'] = str(formatted_time);
+
+        final['timestamp'] = str(datetime.now())
+        
+        # NOTE: temporary fix!
+        final['sensor_type'] = 'soil_moisture'
+        
         num_check = is_num(outer_split[2])
 
         if not num_check:
             _logs.warning(f"{__name__}.map_sensor_alert received alert payload with invalid alert_code: {outer_split[2]}")
             final = None
+            return
         else:
             final.update({
                 'alert_code': num_check(outer_split[2])
@@ -472,6 +492,8 @@ class SensorAlerts:
             except IndexError as e:
                 _logs.warning(f"{__name__}.map_sensor_alert raised {type(e).__name__}: {str(e.__cause__) if e.__cause__ else str(e)}")
                 final = None
+        else:
+            final.update({'data': {}})
 
         return final
 
@@ -489,7 +511,13 @@ def get_from_queue(queue: multiprocessing.Queue, name: str) -> Dict | None:
 
     return msg
 
-def put_to_queue(queue:multiprocessing.Queue, name:str, data: Any, nowait = False) -> Tuple[int, Any]:
+def put_to_queue(
+        queue:multiprocessing.Queue,
+        name:str,
+        data: Any,
+        nowait = False
+        ) -> Tuple[int, Any]:
+    
     buffer = None
     result = status.FAILED
     try:

@@ -7,21 +7,40 @@
 import multiprocessing
 import asyncio
 import logging
+import multiprocessing.queues
 import os
 import random
 import heapq
 from hashlib import sha256
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Any, Dict, List, Tuple, Set
+from typing import (
+    Callable,
+    Any,
+    Dict,
+    List,
+    Tuple,
+    Set
+)
 
 # internal helpers, configs
-from utils import (logger_config,
-                   set_priority, priority,
-                   get_from_queue, put_to_queue,
-                   SensorAlerts,
-                   status)
-from settings import APPConfigurations, Topics, Registry
-from src.data import sysmonitor, locstorage, httpclient
+from src.data import pusherclient
+from utils import (
+    logger_config,
+    set_priority, priority,
+    get_from_queue, put_to_queue,
+    SensorAlerts,
+    status
+)
+from settings import (
+    APPConfigurations,
+    Topics,
+    Registry
+)
+from src.data import (
+    sysmonitor,
+    locstorage,
+    httpclient
+)
 
 # configurations, settings
 _log = logger_config(logging.getLogger(__name__))
@@ -52,23 +71,47 @@ async def _dev_test_task(data: dict) -> None:
 # - parameters:
 # * aio_queue: the message queue to send items to the aiohttp client
 # * hardware_queue: the message queue to send items to the hardware process
-async def _delegator(semaphore: asyncio.Semaphore,
-                     data: Dict,
-                     sysmonitor_q: multiprocessing.Queue,
-                     locstorage_q: multiprocessing.Queue,
-                     httpclient_q: multiprocessing.Queue,
-                     hardware_q: multiprocessing.Queue,
-                     api_stat: int,
-                     ) -> Any:
+async def _delegator(
+        semaphore: asyncio.Semaphore,
+        data: Dict,
+        sysmonitor_q: multiprocessing.Queue,
+        locstorage_q: multiprocessing.Queue,
+        httpclient_q: multiprocessing.Queue,
+        hardware_q: multiprocessing.Queue,
+        pusherclient_q: multiprocessing.Queue,
+        mqttclient_q: multiprocessing.Queue,
+        api_stat: int,
+        ) -> Any:
 
     # topics that need to be handled by the aiohttp client (http requests, api calls)
-    aiohttp_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA, Topics.SENSOR_ALERT, Topics.SINK_ALERT]
+    aiohttp_queue_topics = [
+        Topics.SENSOR_DATA,
+        Topics.SINK_DATA,
+        Topics.SENSOR_ALERT,
+        Topics.SINK_ALERT
+    ]
+    
     # topics that need to be handled by the hardware module
-    hardware_queue_topics = [Topics.IRRIGATION] # TODO: implement this
+    hardware_queue_topics = [
+        Topics.IRRIGATION
+    ]
+    
     # topics handled by aiosqlitedb module
-    aiosqlite_queue_topics = [Topics.SENSOR_DATA, Topics.SINK_DATA]
+    aiosqlite_queue_topics = [
+        Topics.SENSOR_DATA,
+        Topics.SINK_DATA
+    ]
+
+    # pusher
+    pusher_queue_topics = [
+        Topics.COMMANDS_FEEDBACK,
+        Topics.IRRIGATION
+    ]
+    
     # test topics
-    test_topics = ['/dev/test']
+    test_topics = [
+        '/dev/test'
+    ]
 
     async with semaphore:
         dest: List[Tuple[multiprocessing.Queue, Any]] = []
@@ -78,20 +121,31 @@ async def _delegator(semaphore: asyncio.Semaphore,
 
             #_log.warning(f"{alias} received failed task from {aiohttpclient.alias}: {task['task_id']}".capitalize())
             if data['origin'] == Registry.Modules.HttpClient.alias:
-                dest.append((locstorage_q, {**data, 'to_unsynced': True}))
+                dest.append((locstorage_q, {
+                    **data,
+                    'to_unsynced': True
+                }))
 
         else:
 
             if data['topic'] in test_topics:
                 await _dev_test_task(data)
 
-            if data['topic'] in aiosqlite_queue_topics and data['origin'] != 'locstorage_unsynced':
-                dest.append((locstorage_q, {**data, 'to_unsynced': False}))
+            if data['topic'] in aiosqlite_queue_topics:
+                if data['origin'] != 'locstorage_unsynced':
+                    dest.append((locstorage_q, {
+                        **data,
+                        'to_unsynced': False
+                    }))
 
             if data['topic'] in aiohttp_queue_topics:
                 # route tasks to aiosqlite unsynced table if api_status is disconnected
                 if api_stat == status.DISCONNECTED:
-                    dest.append((locstorage_q, {**data, 'to_unsynced': True, 'origin': alias}))
+                    dest.append((locstorage_q, {
+                        **data,
+                        'to_unsynced': True,
+                        'origin': alias
+                    }))
                 else:
                     dest.append((httpclient_q, data))
 
@@ -106,7 +160,14 @@ async def _delegator(semaphore: asyncio.Semaphore,
                     if alert_c == SensorAlerts.CONNECTED:
                         pass
                     elif alert_c == SensorAlerts.DISCONNECTED:
-                        dest.append((hardware_q, {**alert, 'disconnected': True}))
+                        dest.append((hardware_q, {
+                            **alert,
+                            'disconnected': True
+                        }))
+
+            if data['topic'] in pusher_queue_topics:
+                # TODO: map data first
+                dest.append((pusherclient_q, data))
 
         res = [put_to_queue(_queue, __name__, _t_data) for _queue, _t_data in dest]
         if any(r[0] for r in res) == status.FAILED:
@@ -115,59 +176,89 @@ async def _delegator(semaphore: asyncio.Semaphore,
     return
 
 # passes the triggers into the concerned subprocess(es)
-async def _trigger_handler(trigger: Dict,
-                     sysmonitor_q: multiprocessing.Queue,
-                     locstorage_q: multiprocessing.Queue,
-                     httpclient_q: multiprocessing.Queue,
-                     hardware_q: multiprocessing.Queue,
-                     loop: asyncio.AbstractEventLoop
-                     ) -> Any:
+async def _trigger_handler(
+        trigger: Dict,
+        sysmonitor_q: multiprocessing.Queue,
+        locstorage_q: multiprocessing.Queue,
+        httpclient_q: multiprocessing.Queue,
+        hardware_q: multiprocessing.Queue,
+        pusherclient_q: multiprocessing.Queue,
+        mqttclient_q: multiprocessing.Queue,
+        loop: asyncio.AbstractEventLoop
+        ) -> Any:
+    
     dest: List[Tuple[multiprocessing.Queue, Any]] = []
 
     if trigger['context'] == Registry.Triggers.contexts.API_CONNECTION_STATUS:
 
         if trigger['data']['status'] == status.CONNECTED:
             # if the trigger has 'status.CONNECTED' send to local storage
-            dest.append((locstorage_q, {**trigger, 'trigger': True}))
+            dest.append((locstorage_q, {
+                **trigger,
+                'trigger': True
+            }))
         else:
-            dest.append((locstorage_q, {**trigger, 'trigger': True}))
-            dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
+            dest.append((locstorage_q, {
+                **trigger,
+                'trigger': True
+            }))
+            dest.append((sysmonitor_q, {
+                **trigger,
+                'trigger': True
+            }))
 
         # if trigger['origin'] != httpclient.alias:
         #     dest.append((sysmonitor_q, {**trigger, 'trigger': True}))
 
     elif trigger['context'] == Registry.Triggers.contexts.UNSYNCED_DATA:
 
-        dest.append((locstorage_q, {**trigger, 'trigger': True}))
+        dest.append((locstorage_q, {
+            **trigger,
+            'trigger': True
+        }))
+
+    elif trigger['context'] == Registry.Triggers.contexts.SE_INTERVAL:
+
+        dest.append((mqttclient_q, {
+            **trigger,
+            'trigger': True
+        }))
+    
+    elif trigger['context'] == Registry.Triggers.contexts.SE_IRRIGATION_OVERRIDE:
+
+        dest.append((mqttclient_q, {
+            **trigger,
+            'trigger': True
+        }))
 
     with ThreadPoolExecutor() as pool:
         for _queue, _trigger in dest:
-            await loop.run_in_executor(pool, put_to_queue, _queue, __name__, _trigger)
+            await loop.run_in_executor(
+                pool,
+                put_to_queue,
+                _queue,
+                __name__,
+                _trigger
+            )
 
     return
-
-# internal helper function that handles putting messages to queue
-# primarily used by the delegator
-def _to_queue(queue: multiprocessing.Queue, msg: Dict[str, Any]) -> bool:    
-    try:
-        queue.put(msg)
-        return True
-    except Exception as e:
-        _log.error(f"Failed to put message to queue at PID {os.getpid()} ({__name__}): {str(e)}")
-        return False
 
 # start the taskmanager process
 #
 # - parameters:
-# * msg_queue: the message queue that the mqtt client sends messages to. items from this queue are identified and delegated in this task manager module
-# * aio_queue: the queue that the task manager will send request tasks to, received by the aioclient submodule from the 'data' module
-# * hardware_queue: hardware tasks are put into this queue by the task manager. received by the hardware module
+# * msg_queue: the message queue that the mqtt client sends messages to.
+# items from this queue are identified and delegated in this task manager module
+# * aio_queue: the queue that the task manager will send request tasks to,
+# received by the aioclient submodule from the 'data' module
+# * hardware_queue: hardware tasks are put into this queue by the task manager.
+# received by the hardware module
 async def start(
         taskmanager_q: multiprocessing.Queue,
         httpclient_q: multiprocessing.Queue,
         hardware_q: multiprocessing.Queue,
         sysmonitor_q: multiprocessing.Queue,
         triggers_q: multiprocessing.Queue,
+        mqttclient_q: multiprocessing.Queue,
         api_stat: int
         ) -> None:
 
@@ -176,10 +267,14 @@ async def start(
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError as e:
-        _log.error(f"{alias} failed to get running event loop at PID {os.getpid()}: {str(e)}")
+        _log.error(
+            f"{alias.capitalize()} failed to get running event loop: "
+            f"{str(e)}"
+        )
         return
 
     locstorage_q = multiprocessing.Queue()
+    pusherclient_q = multiprocessing.Queue()
 
     # api status flag
     api_status = status.DISCONNECTED
@@ -191,20 +286,49 @@ async def start(
         'httpclient_q':httpclient_q,
         'hardware_q': hardware_q,
         'locstorage_q': locstorage_q,
+        'pusherclient_q': pusherclient_q,
+        'mqttclient_q': mqttclient_q
     }
 
     tasks: Set[asyncio.Task] = set()
     if loop:
-        _log.info(f"{alias} subprocess active at PID {os.getpid()}".capitalize())
+        _log.info(f"{alias} subprocess active".capitalize())
         # use the threadpool executor to run the monitoring function that retrieves data from the queue
         try:
-            aiosqlitedb_t = asyncio.create_task(locstorage.start(locstorage_q, taskmanager_q, httpclient_q))
+            aiosqlitedb_t = asyncio.create_task(
+                locstorage.start(
+                    locstorage_q,
+                    taskmanager_q,
+                    httpclient_q
+                )
+            )
+            
+            # TODO: pass queues
+            pusherclient_t = asyncio.create_task(
+                pusherclient.start(
+                    taskmanager_q,
+                    triggers_q,
+                    pusherclient_q
+                )
+            )
+
             with ThreadPoolExecutor() as pool:
                 while True:
                     # run message retrieval from queue in non-blocking way
-                    data = await loop.run_in_executor(pool, get_from_queue, taskmanager_q, __name__)
+                    data = await loop.run_in_executor(
+                        pool,
+                        get_from_queue,
+                        taskmanager_q,
+                        __name__
+                    )
+
                     # triggers
-                    trigger = await loop.run_in_executor(pool, get_from_queue, triggers_q, __name__)
+                    trigger = await loop.run_in_executor(
+                        pool,
+                        get_from_queue,
+                        triggers_q,
+                        __name__
+                    )
                     task = None
 
                     #
@@ -224,12 +348,19 @@ async def start(
                     #   'data' == (dictionary containing the data of the trigger, including the timestamp and the error(s) if any)
                     #
                     if trigger:
-                        _log.info(f"{alias} received trigger: {trigger['context']}".capitalize())
+                        _log.info(
+                            f"{alias.capitalize()} received trigger: "
+                            f"{trigger['context']}"
+                        )
 
                         if trigger['context'] == Registry.Triggers.contexts.API_CONNECTION_STATUS:
                             api_status = trigger['data']['status']
 
-                        task = asyncio.create_task(_trigger_handler(**queues_kwargs, trigger=trigger, loop=loop))
+                        task = asyncio.create_task(_trigger_handler(
+                            **queues_kwargs,
+                            trigger=trigger,
+                            loop=loop
+                        ))
                         tasks.add(task)
                         task.add_done_callback(tasks.discard)
 
@@ -257,7 +388,10 @@ async def start(
 
                         if 'task_id' not in d_keys:
                             data.update({
-                                    'task_id': sha256(f"{data['topic']}{data['payload']}".encode('utf-8')).hexdigest()
+                                'task_id': sha256(
+                                    f"{data['topic']}{data['payload']}"
+                                    .encode('utf-8'))
+                                    .hexdigest()
                                 })
 
                         if 'origin' not in d_keys:
@@ -265,9 +399,18 @@ async def start(
                                 'origin': alias
                             })
 
-                        _log.debug(f"{alias} received{' failed ' if data['status'] == status.FAILED else ' '}item from queue: {data['task_id']}".capitalize())
+                        _log.debug(
+                            f"{alias.capitalize()} received"
+                            f"{' failed ' if data['status'] == status.FAILED else ' '}"
+                            f"item from queue: {data}"
+                        )
 
-                        task = asyncio.create_task(_delegator(**queues_kwargs, semaphore=semaphore, data=data, api_stat=api_status)) # pass api status flag to delegator
+                        task = asyncio.create_task(_delegator(
+                            **queues_kwargs,
+                            semaphore=semaphore,
+                            data=data,
+                            api_stat=api_status
+                        )) # pass api status flag to delegator
                         tasks.add(task)
                         task.add_done_callback(tasks.discard)
 
@@ -277,8 +420,14 @@ async def start(
         except (KeyboardInterrupt, asyncio.CancelledError):
             for t in tasks:
                 t.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(
+                *tasks,
+                return_exceptions=True
+            )
 
-            loop.run_until_complete(aiosqlitedb_t)
+            loop.run_until_complete(*[
+                aiosqlitedb_t,
+                pusherclient_t
+            ])
 
             return
