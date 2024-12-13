@@ -107,7 +107,7 @@ async def _delegator(
         Topics.COMMANDS_FEEDBACK,
         Topics.IRRIGATION
     ]
-    
+
     # test topics
     test_topics = [
         '/dev/test'
