@@ -130,5 +130,569 @@
         "temperature": 31.3,
         "humidity": 70.0,
         "soil_moisture": 89
+    },
+    {
+        "timestamp": "2024-12-07 21:03:04",
+        "temperature": 31.3,
+        "humidity": 70.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 21:08:05",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 21:13:06",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 21:18:07",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 90
+    },
+    {
+        "timestamp": "2024-12-07 21:23:07",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 87
+    },
+    {
+        "timestamp": "2024-12-07 21:28:08",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 87
+    },
+    {
+        "timestamp": "2024-12-07 21:33:08",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 87
+    },
+    {
+        "timestamp": "2024-12-07 21:38:09",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-07 21:43:10",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-07 21:48:11",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 21:53:12",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-07 21:58:13",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:03:14",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:08:16",
+        "temperature": 31.3,
+        "humidity": 69.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:13:17",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:18:18",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:23:19",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:28:21",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:33:22",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:38:23",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:43:24",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:48:26",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:53:27",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 22:58:29",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:03:30",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:08:31",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:13:32",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:18:33",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:23:33",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:28:35",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:33:36",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:43:40",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-07 23:48:41",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-07 23:53:42",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-07 23:58:43",
+        "temperature": 31.3,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:03:44",
+        "temperature": 31.1,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:08:45",
+        "temperature": 31.0,
+        "humidity": 68.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-08 00:13:46",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 100
+    },
+    {
+        "timestamp": "2024-12-08 00:18:47",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:23:48",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 98
+    },
+    {
+        "timestamp": "2024-12-08 00:28:49",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:33:50",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:38:51",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:43:53",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:48:54",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:53:55",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 00:58:56",
+        "temperature": 30.8,
+        "humidity": 68.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:03:57",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:08:58",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:14:00",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:19:01",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:24:02",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:29:04",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:34:05",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:39:07",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:44:08",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:49:09",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:54:10",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 01:59:11",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:04:12",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:09:13",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:14:14",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:19:15",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:24:16",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:29:17",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:34:18",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:39:19",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:44:21",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:49:22",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:54:23",
+        "temperature": 30.8,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 02:59:24",
+        "temperature": 30.6,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:04:25",
+        "temperature": 30.6,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:09:26",
+        "temperature": 30.6,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:14:27",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:19:28",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:24:29",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:29:30",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:34:31",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:39:32",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:44:33",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:49:34",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:54:35",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 03:59:37",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:04:37",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:09:39",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:19:41",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:24:42",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:29:43",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:34:45",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:39:46",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:44:47",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:49:48",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:54:49",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
+    },
+    {
+        "timestamp": "2024-12-08 04:59:50",
+        "temperature": 30.2,
+        "humidity": 67.0,
+        "soil_moisture": 99
     }
 ]
