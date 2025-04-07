@@ -188,7 +188,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
                 mqttclient_q=mqttclient_q
             )
         ))
-        
+
         # start the system monitor queue
         sysmonitor_args = {
             'sys_queue': sys_queue,
@@ -201,7 +201,7 @@ async def main(loop: asyncio.AbstractEventLoop, api_status: int) -> None:
         # shutdown and cleanup
         try:
             await asyncio.gather(*coroutines)
-            
+
         except (asyncio.CancelledError, KeyboardInterrupt) as e:
             _log.warning(f"Main process received {type(e).__name__}, shutting down operations")
 
@@ -268,7 +268,7 @@ def run(core_status: int, api_status: int):
         finally:
             _log.debug(f"Closing main() loop at PID {os.getpid()}")
             loop.close()
-            
+
     else:
         return
 
@@ -358,7 +358,7 @@ if __name__ == "__main__":
         if not args.mode:
             start.print_help()
             os._exit(0)
-        elif args.mode == 'dev': 
+        elif args.mode == 'dev':
             Modes.dev()
             _log.info('Starting in development mode - VERBOSE logging enabled, logging to file disabled')
         elif args.mode == 'normal' or not args.mode:
