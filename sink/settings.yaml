@@ -1,0 +1,54 @@
+### --------------------- APP CONFIGURATIONS, CONSTANTS ETC. --------------------- ###
+app_configurations:
+    mqtt_pwd: null
+    mqtt_username: null
+    client_id: '5f110dd5-9735-459b-ba83-2896cd9cbb3f' # placeholder client id
+    global_semaphore_count: 5 # the semaphore count for each processes' asyncio event loops
+    periodically_clear_local: False # periodically clear the oldest entries in the local sqlite database to save space
+    # disable_irrigation: True # dev config for disabling irrigation on non RPI devices
+    api_disconnect_await: 1800 # in seconds
+
+    local_storage:
+        directory: '/home/smmic/.smmic/sink/storage/'
+
+    network:
+        primary_interface: 'wlan0' #rpi primary interface is wlan0
+        network_check_intervals: 2 # in minutes
+        gateway: "192.168.100.1" # wifi access point ip address
+        max_connection_timeouts: 3 # amounts of time conenction timeouts can be tolerated before terminating the entire opeartion
+        timeout: 10 # timeout time (in seconds)
+
+    tests:
+        src_path: '/home/smmic/.smmic/sink/src/'
+
+    pusher:
+        app_id: "1897218"
+        key: "d0f649dd91498f8916b8"
+        secret: "0b36637c07e16532abc9"
+        cluster: "ap3"
+        ssl: True
+        channels: ["private-user_commands"]
+
+    tests:
+        src_path: '/home/smmic/.smmic/sink/src/'
+    
+### --------------------- API CONFIGURATIONS / CONSTANTS, URLS --------------------- ###
+
+headers:
+    Content-Type: "application/json"
+
+### --------------------- DEVELOPMENT CONFIGURATIONS --------------------- ###
+dev_configs:
+    enable_log_to_file: True # default value for enabling or disabling logging to log file
+    log_file_directory: '/home/smmic/.smmic/sink/common/logs/'
+    log_file_name: 'smmic.log'
+
+### --------------------- HARDWARE CONFIGURATIONS --------------------- ###
+hardware_configurations:
+    irrigation_channel: 23
+
+### --------------------- OTHER CONFIGUARTIONS BELOW --------------------- ###
+registered_sensors: [
+    "58c6dd67-3200-4bf0-8044-a851465edd02",
+    "2d976174-d657-4f1d-9432-758996d36455"
+]
